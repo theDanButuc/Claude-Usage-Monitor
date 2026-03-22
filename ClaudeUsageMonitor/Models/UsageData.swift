@@ -2,10 +2,10 @@ import Foundation
 
 struct UsageData {
     var planType:        String
-    var messagesUsed:    Int
-    var messagesLimit:   Int
-    var sessionUsed:     Int = 0
-    var sessionLimit:    Int = 0
+    var messagesUsed:    Int        // billing-period total (from DOM)
+    var messagesLimit:   Int        // billing-period limit  (from DOM)
+    var sessionUsed:     Int = 0   // current rate-limit window (from API interceptor)
+    var sessionLimit:    Int = 0   // current rate-limit window (from API interceptor)
     var resetDate:       Date?
     var rateLimitStatus: String
     var lastUpdated:     Date
@@ -14,14 +14,17 @@ struct UsageData {
 
     var hasSessionData: Bool { sessionLimit > 0 }
 
-    // Always drive the UI from the primary (billing-period) numbers.
-    // Session data is shown in a secondary card only when present.
+    /// What to show in the ring and menu bar:
+    /// session window when available (what the user asked for), billing period as fallback.
+    var primaryUsed:  Int { hasSessionData ? sessionUsed  : messagesUsed  }
+    var primaryLimit: Int { hasSessionData ? sessionLimit : messagesLimit }
+
     var usagePercentage: Double {
-        guard messagesLimit > 0 else { return 0 }
-        return min(1.0, Double(messagesUsed) / Double(messagesLimit))
+        guard primaryLimit > 0 else { return 0 }
+        return min(1.0, Double(primaryUsed) / Double(primaryLimit))
     }
 
-    var messagesRemaining: Int { max(0, messagesLimit - messagesUsed) }
+    var messagesRemaining: Int { max(0, primaryLimit - primaryUsed) }
 
     var timeUntilReset: String {
         guard let resetDate else { return "Unknown" }
@@ -39,9 +42,9 @@ struct UsageData {
         return f.string(from: lastUpdated)
     }
 
-    /// Short string shown in the menu bar: "45/100"
+    /// Label shown in the menu bar: "51/100"
     var menuBarLabel: String {
-        guard messagesLimit > 0 else { return "" }
-        return "\(messagesUsed)/\(messagesLimit)"
+        guard primaryLimit > 0 else { return "" }
+        return "\(primaryUsed)/\(primaryLimit)"
     }
 }

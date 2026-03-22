@@ -15,11 +15,14 @@ private let kInterceptorJS = """
     };
 
     const _tryForward = (text, url) => {
-        if (!text || text.length < 2 || text.length > 200000) return;
+        if (!text || text.length < 10 || text.length > 500000) return;
+        // Skip static assets and i18n files
+        if (url.indexOf('.js') !== -1 || url.indexOf('.css') !== -1 ||
+            url.indexOf('i18n') !== -1 || url.indexOf('statsig') !== -1) return;
         try {
             const json = JSON.parse(text);
-            const flat = JSON.stringify(json).toLowerCase();
-            if (/messages|usage|limit|quota|remaining|reset|rate_limit/.test(flat)) {
+            // Capture any API JSON that has at least one numeric value
+            if (text.indexOf('{') !== -1 && /:\\s*\\d/.test(text)) {
                 _send({ type: 'api', url: url, data: json });
             }
         } catch(e) {}
@@ -58,7 +61,8 @@ private let kDOMExtractionJS = """
         planType: 'Unknown', messagesUsed: -1, messagesLimit: -1,
         sessionUsed: -1, sessionLimit: -1,
         resetDateStr: '', sessionResetStr: '',
-        rateLimitStatus: 'Normal', needsLogin: false, source: 'dom'
+        rateLimitStatus: 'Normal', needsLogin: false, source: 'dom',
+        rawText: ''
     };
     try {
         var url = window.location.href;
@@ -68,6 +72,7 @@ private let kDOMExtractionJS = """
         }
 
         var body = document.body ? document.body.innerText : '';
+        r.rawText = body.substring(0, 3000);
 
         // Plan
         var plans = [[/claude\\s+max|\\bmax\\s+plan/i,'Max'],[/claude\\s+pro|\\bpro\\s+plan/i,'Pro'],
@@ -196,6 +201,8 @@ class WebScrapingService: NSObject, ObservableObject {
     func refresh() {
         guard !isLoading else { return }
         isLoading = true
+        usageData?.sessionUsed  = 0
+        usageData?.sessionLimit = 0
         scrapeWebView.load(URLRequest(url: usageURL))
     }
 
@@ -213,7 +220,7 @@ class WebScrapingService: NSObject, ObservableObject {
     // MARK: - DOM extraction (fallback)
 
     private func runDOMExtraction() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
             self?.scrapeWebView.evaluateJavaScript(kDOMExtractionJS) { result, _ in
                 guard let self,
                       let s = result as? String,
@@ -268,14 +275,17 @@ class WebScrapingService: NSObject, ObservableObject {
 
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
-                // Only write API data if DOM hasn't given us a result yet.
-                // DOM extraction runs ~2.5 s after page load and is always fresher
-                // than a cached API response captured by the interceptor.
-                guard self.usageData == nil else { return }
-                self.usageData = UsageData(
+                // API interceptor fires before DOM extraction (which waits 2.5 s).
+                // API responses contain the current rate-limit window → session fields.
+                var data = self.usageData ?? UsageData(
                     planType: "Unknown", messagesUsed: u, messagesLimit: l,
                     resetDate: resetDate, rateLimitStatus: "Normal", lastUpdated: Date()
                 )
+                data.sessionUsed  = u
+                data.sessionLimit = l
+                if let rd = resetDate { data.resetDate = rd }
+                data.lastUpdated  = Date()
+                self.usageData  = data
                 self.isLoading  = false
                 self.needsLogin = false
             }
@@ -289,8 +299,8 @@ class WebScrapingService: NSObject, ObservableObject {
         let planType        = j["planType"]        as? String ?? "Unknown"
         let messagesUsed    = j["messagesUsed"]    as? Int    ?? 0
         let messagesLimit   = j["messagesLimit"]   as? Int    ?? 0
-        let sessionUsed     = j["sessionUsed"]     as? Int    ?? -1
-        let sessionLimit    = j["sessionLimit"]    as? Int    ?? -1
+        let sessionUsed     = j["sessionUsed"]     as? Int    ?? 0
+        let sessionLimit    = j["sessionLimit"]    as? Int    ?? 0
         let rateLimitStatus = j["rateLimitStatus"] as? String ?? "Normal"
         let resetDateStr    = j["resetDateStr"]    as? String ?? ""
 
@@ -310,21 +320,26 @@ class WebScrapingService: NSObject, ObservableObject {
             }
         }
 
-        // Merge with any data already captured via the API interceptor
         var data = usageData ?? UsageData(
             planType: planType, messagesUsed: messagesUsed, messagesLimit: messagesLimit,
             resetDate: resetDate, rateLimitStatus: rateLimitStatus, lastUpdated: Date()
         )
         if data.planType == "Unknown" || data.planType.isEmpty { data.planType = planType }
-        if data.messagesLimit == 0 { data.messagesUsed = messagesUsed; data.messagesLimit = messagesLimit }
-        if sessionLimit > 0 && data.sessionLimit == 0 {
-            data.sessionUsed = sessionUsed; data.sessionLimit = sessionLimit
+        if messagesLimit > 0 {
+            data.messagesUsed  = messagesUsed
+            data.messagesLimit = messagesLimit
+        }
+        // First progressbar = current session window; second = billing period.
+        // Only write if DOM found two bars (sessionLimit > 0).
+        if sessionLimit > 0 {
+            data.sessionUsed  = sessionUsed
+            data.sessionLimit = sessionLimit
         }
         if resetDate != nil && data.resetDate == nil { data.resetDate = resetDate }
         data.rateLimitStatus = rateLimitStatus
         data.lastUpdated = Date()
 
-        usageData  = data
+        usageData    = data
         errorMessage = nil
         needsLogin   = false
     }
@@ -379,6 +394,12 @@ extension WebScrapingService: WKNavigationDelegate {
             DispatchQueue.main.async { self.isLoading = false; self.errorMessage = error.localizedDescription }
         }
     }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation nav: WKNavigation!, withError error: Error) {
+        if webView === scrapeWebView {
+            DispatchQueue.main.async { self.isLoading = false; self.errorMessage = error.localizedDescription }
+        }
+    }
 }
 
 // MARK: - WKScriptMessageHandler
@@ -397,3 +418,4 @@ extension WebScrapingService: WKScriptMessageHandler {
         }
     }
 }
+
