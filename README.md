@@ -88,7 +88,7 @@ xcode-select --install   # if not already installed
 Clone and build:
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/theDanButuc/Claude-Usage-Monitor.git
 cd ClaudeUsageMonitor
 
 # Compile
