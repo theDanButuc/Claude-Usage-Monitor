@@ -74,21 +74,50 @@ private let kDOMExtractionJS = """
                      [/claude\\s+team|\\bteam\\s+plan/i,'Team'],[/\\bfree\\s+plan|claude\\s+free/i,'Free']];
         for (var p of plans) { if (p[0].test(body)) { r.planType = p[1]; break; } }
 
-        // All "X of Y" pairs on the page
-        var allPairs = [];
-        var re = /(\\d+)\\s*(?:of|\\/|out of)\\s*(\\d+)/gi, m;
-        while ((m = re.exec(body)) !== null) {
-            allPairs.push([parseInt(m[1]), parseInt(m[2])]);
+        // ── Specific patterns first (most reliable) ──────────────────────
+        var specificPatterns = [
+            /(\\d+)\\s+of\\s+(\\d+)\\s+(?:usage\\s+)?messages?/i,
+            /(\\d+)\\s+messages?\\s+(?:of|out\\s+of)\\s+(\\d+)/i,
+            /(\\d+)\\s*\\/\\s*(\\d+)\\s+messages?/i,
+            /messages?[:\\s]+(\\d+)\\s*(?:\\/|of)\\s*(\\d+)/i,
+        ];
+        for (var sp of specificPatterns) {
+            var sm = body.match(sp);
+            if (sm) {
+                r.messagesUsed  = parseInt(sm[1]);
+                r.messagesLimit = parseInt(sm[2]);
+                break;
+            }
         }
 
-        // Heuristic: smallest limit = session window; largest = billing period
-        allPairs.sort((a,b) => a[1]-b[1]);
-        if (allPairs.length >= 2) {
-            r.sessionUsed  = allPairs[0][0]; r.sessionLimit  = allPairs[0][1];
-            r.messagesUsed = allPairs[allPairs.length-1][0];
-            r.messagesLimit= allPairs[allPairs.length-1][1];
-        } else if (allPairs.length === 1) {
-            r.messagesUsed = allPairs[0][0]; r.messagesLimit = allPairs[0][1];
+        // ── aria progressbar (single authoritative value) ─────────────────
+        if (r.messagesLimit <= 0) {
+            var bars = Array.from(document.querySelectorAll('[role="progressbar"]'));
+            // Use the LAST bar — Claude puts the primary usage bar last
+            for (var i = bars.length - 1; i >= 0; i--) {
+                var now = bars[i].getAttribute('aria-valuenow');
+                var max = bars[i].getAttribute('aria-valuemax');
+                if (now !== null && max !== null && parseInt(max) > 0) {
+                    r.messagesUsed  = parseInt(now);
+                    r.messagesLimit = parseInt(max);
+                    break;
+                }
+            }
+        }
+
+        // ── Generic "X / Y" fallback — take the pair with the largest limit
+        if (r.messagesLimit <= 0) {
+            var allPairs = [];
+            var re = /(\\d+)\\s*(?:of|\\/|out of)\\s*(\\d+)/gi, m;
+            while ((m = re.exec(body)) !== null) {
+                var u = parseInt(m[1]), l = parseInt(m[2]);
+                if (l > 0 && u <= l) allPairs.push([u, l]);
+            }
+            if (allPairs.length > 0) {
+                allPairs.sort((a,b) => b[1]-a[1]);   // largest limit first
+                r.messagesUsed  = allPairs[0][0];
+                r.messagesLimit = allPairs[0][1];
+            }
         }
 
         // aria progressbars (multiple: first = session, last = period)
@@ -233,27 +262,20 @@ class WebScrapingService: NSObject, ObservableObject {
         for c in (candidates + nestedCandidates) {
             let used  = intValue(c.used)
             let limit = intValue(c.limit)
-            guard let u = used, let l = limit, l > 0 else { continue }
+            guard let u = used, let l = limit, l > 0, u <= l else { continue }
 
             let resetDate = parseResetDate(c.reset)
 
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
-                var existing = self.usageData ?? UsageData(
+                // Only write API data if DOM hasn't given us a result yet.
+                // DOM extraction runs ~2.5 s after page load and is always fresher
+                // than a cached API response captured by the interceptor.
+                guard self.usageData == nil else { return }
+                self.usageData = UsageData(
                     planType: "Unknown", messagesUsed: u, messagesLimit: l,
                     resetDate: resetDate, rateLimitStatus: "Normal", lastUpdated: Date()
                 )
-                // Prefer the smallest limit as the "session" window
-                if l < (existing.messagesLimit) || existing.messagesLimit == 0 {
-                    existing.sessionUsed  = u
-                    existing.sessionLimit = l
-                    if let rd = resetDate { existing.resetDate = rd }
-                } else {
-                    existing.messagesUsed  = u
-                    existing.messagesLimit = l
-                }
-                existing.lastUpdated = Date()
-                self.usageData  = existing
                 self.isLoading  = false
                 self.needsLogin = false
             }

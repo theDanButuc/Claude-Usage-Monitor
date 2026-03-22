@@ -82,6 +82,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if popover.isShown {
             popover.performClose(nil)
         } else if let button = statusItem.button {
+            // Refresh on every open, unless a refresh is already in flight
+            // or data is less than 30 seconds old.
+            let age = service.usageData.map { Date().timeIntervalSince($0.lastUpdated) } ?? 999
+            if age > 30 { service.refresh() }
+
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()
         }
