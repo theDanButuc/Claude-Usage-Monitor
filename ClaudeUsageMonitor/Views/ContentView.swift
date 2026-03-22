@@ -123,8 +123,9 @@ struct ContentView: View {
 
     private var progressSection: some View {
         let data  = service.usageData
-        let used  = data?.messagesUsed  ?? 0
-        let limit = data?.messagesLimit ?? 0
+        // Show current session window when available, billing period otherwise
+        let used  = data?.primaryUsed  ?? 0
+        let limit = data?.primaryLimit ?? 0
         let pct   = data?.usagePercentage ?? 0
 
         return VStack(spacing: 6) {
@@ -143,8 +144,8 @@ struct ContentView: View {
                 }
             }
 
-            if service.usageData != nil {
-                Text("Billing period usage")
+            if let data = service.usageData {
+                Text(data.hasSessionData ? "Current session" : "Billing period")
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
             }
@@ -183,12 +184,18 @@ struct ContentView: View {
 
     private func statsRow(_ data: UsageData) -> some View {
         HStack(spacing: 10) {
-            statCard(
-                icon: "chart.bar.fill",
-                label: "Remaining",
-                value: data.messagesLimit > 0 ? "\(data.messagesRemaining)" : "—",
-                color: .blue
-            )
+            if data.hasSessionData && data.messagesLimit > 0 {
+                // Session shown in ring; show the billing-period total in the card
+                statCard(icon: "calendar",
+                         label: "Period total",
+                         value: "\(data.messagesUsed)/\(data.messagesLimit)",
+                         color: .blue)
+            } else {
+                statCard(icon: "chart.bar.fill",
+                         label: "Remaining",
+                         value: data.primaryLimit > 0 ? "\(data.messagesRemaining)" : "—",
+                         color: .blue)
+            }
             statCard(
                 icon: "bolt.fill",
                 label: "Rate limit",
