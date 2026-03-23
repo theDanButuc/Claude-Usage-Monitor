@@ -6,6 +6,12 @@ A native macOS menu-bar app that tracks your [Claude.ai](https://claude.ai) usag
 
 ---
 
+## Screenshot
+
+<img src="screenshots/popover.png" width="260" alt="ClaudeUsageMonitor popover" />
+
+---
+
 ## Features
 
 - **Menu-bar only** — no Dock icon, stays out of your way
@@ -87,54 +93,13 @@ Clone and build:
 
 ```bash
 git clone https://github.com/theDanButuc/Claude-Usage-Monitor.git
-cd ClaudeUsageMonitor
+cd Claude-Usage-Monitor
 
-# Compile
-swiftc \
-  -sdk $(xcrun --show-sdk-path --sdk macosx) \
-  -target arm64-apple-macosx13.0 \
-  -framework AppKit -framework WebKit -framework SwiftUI -framework Combine \
-  -O -module-name ClaudeUsageMonitor \
-  -o build/ClaudeUsageMonitor \
-  ClaudeUsageMonitor/ClaudeUsageMonitorApp.swift \
-  ClaudeUsageMonitor/AppDelegate.swift \
-  ClaudeUsageMonitor/LoginWindowController.swift \
-  ClaudeUsageMonitor/Models/UsageData.swift \
-  ClaudeUsageMonitor/Services/WebScrapingService.swift \
-  ClaudeUsageMonitor/Views/CircularProgressView.swift \
-  ClaudeUsageMonitor/Views/ContentView.swift
-
-# Package into .app
-mkdir -p build/ClaudeUsageMonitor.app/Contents/{MacOS,Resources}
-cp build/ClaudeUsageMonitor     build/ClaudeUsageMonitor.app/Contents/MacOS/
-cp ClaudeUsageMonitor/Info.plist build/ClaudeUsageMonitor.app/Contents/
-cp ClaudeUsageMonitor/Assets/AppIcon.icns build/ClaudeUsageMonitor.app/Contents/Resources/
-
-# Sign (ad-hoc)
-codesign --force --deep --sign - \
-  --entitlements ClaudeUsageMonitor/ClaudeUsageMonitor.entitlements \
-  --options runtime \
-  build/ClaudeUsageMonitor.app
-
-# Run
-open build/ClaudeUsageMonitor.app
+bash scripts/build.sh             # native arch (arm64 or x86_64)
+bash scripts/build.sh --universal # universal binary (arm64 + x86_64)
 ```
 
-### Rebuild the DMG
-
-```bash
-brew install create-dmg   # one-time
-
-create-dmg \
-  --volname "Claude Usage Monitor" \
-  --volicon "build/ClaudeUsageMonitor.app/Contents/Resources/AppIcon.icns" \
-  --window-size 540 380 --icon-size 128 \
-  --icon "ClaudeUsageMonitor.app" 130 190 \
-  --app-drop-link 400 190 \
-  --no-internet-enable \
-  dist/ClaudeUsageMonitor.dmg \
-  build/ClaudeUsageMonitor.app
-```
+Produces `dist/ClaudeUsageMonitor-v1.1.0.dmg` ready to install.
 
 ### Regenerate the app icon
 
@@ -199,9 +164,14 @@ ClaudeUsageMonitor/
 │   ├── Info.plist
 │   └── ClaudeUsageMonitor.entitlements
 ├── scripts/
+│   ├── build.sh                       # Local build + DMG script
 │   └── make_icon.swift               # Icon generator (Swift script)
+├── screenshots/
+│   └── popover.png                   # App screenshot
 ├── dist/
 │   └── ClaudeUsageMonitor.dmg        # Pre-built installer
+├── .github/workflows/
+│   └── release.yml                   # CI: build & publish DMG on git tag
 ├── project.yml                        # XcodeGen spec
 └── .gitignore
 ```
