@@ -3,6 +3,14 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject var service: WebScrapingService
 
+    private var refreshIntervalLabel: String {
+        let interval = UserDefaults.standard.double(forKey: "refreshInterval")
+        let secs = interval > 0 ? interval : 120
+        if secs < 60 { return "\(Int(secs))s" }
+        let mins = Int(secs / 60)
+        return "\(mins)m"
+    }
+
     var body: some View {
         ZStack {
             // Frosted-glass base
@@ -78,6 +86,9 @@ struct ContentView: View {
             } else if let msg = service.errorMessage, service.usageData == nil {
                 errorView(msg)
             } else {
+                if let data = service.usageData, data.isStale {
+                    staleBanner
+                }
                 progressSection
                 if let data = service.usageData {
                     if data.resetDate != nil { resetRow(data) }
@@ -86,6 +97,28 @@ struct ContentView: View {
             }
         }
         .padding(16)
+    }
+
+    // MARK: - Stale data banner
+
+    private var staleBanner: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "clock.badge.exclamationmark.fill")
+                .foregroundStyle(.orange)
+                .font(.system(size: 12))
+            Text("Data may be outdated")
+                .font(.system(size: 11))
+                .foregroundStyle(.orange)
+            Spacer()
+            Button("Refresh") { service.refresh() }
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.orange)
+                .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(Color.orange.opacity(0.10))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     // MARK: - Loading / error states
@@ -230,14 +263,19 @@ struct ContentView: View {
 
     private var footer: some View {
         HStack(spacing: 8) {
-            if let data = service.usageData {
-                Text("Updated \(data.lastUpdatedFormatted)")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
-            } else {
-                Text("Not yet updated")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
+            VStack(alignment: .leading, spacing: 1) {
+                if let data = service.usageData {
+                    Text("Updated \(data.lastUpdatedFormatted)")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                } else {
+                    Text("Not yet updated")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                }
+                Text("Refreshes every \(refreshIntervalLabel)  ·  Right-click icon to change")
+                    .font(.system(size: 9))
+                    .foregroundStyle(Color.primary.opacity(0.25))
             }
 
             Spacer()
@@ -245,7 +283,7 @@ struct ContentView: View {
             Button {
                 service.refresh()
             } label: {
-                Image(systemName: service.isLoading ? "arrow.clockwise" : "arrow.clockwise")
+                Image(systemName: "arrow.clockwise")
                     .rotationEffect(service.isLoading ? .degrees(360) : .zero)
                     .animation(
                         service.isLoading

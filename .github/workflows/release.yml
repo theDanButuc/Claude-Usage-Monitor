@@ -1,0 +1,91 @@
+name: Build & Release
+
+# Triggered by version tags: git tag v1.1.0 && git push --tags
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+jobs:
+  build:
+    name: Build DMG
+    runs-on: macos-latest
+
+    steps:
+      # ── Checkout ────────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Xcode ───────────────────────────────────────────────────────────────
+      - name: Select latest stable Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      # ── XcodeGen ────────────────────────────────────────────────────────────
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      # ── Build ────────────────────────────────────────────────────────────────
+      - name: Build (Release · universal)
+        run: |
+          xcodebuild \
+            -project ClaudeUsageMonitor.xcodeproj \
+            -scheme ClaudeUsageMonitor \
+            -configuration Release \
+            -derivedDataPath "${{ runner.temp }}/DerivedData" \
+            ARCHS="arm64 x86_64" \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      # ── Package ──────────────────────────────────────────────────────────────
+      - name: Package app into DMG
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          APP_PATH=$(find "${{ runner.temp }}/DerivedData" -name "ClaudeUsageMonitor.app" -type d | head -1)
+
+          echo "App found at: $APP_PATH"
+          mkdir -p dist
+
+          # Ad-hoc sign
+          codesign --force --deep --sign - "$APP_PATH"
+
+          # Staging folder with Applications symlink (classic DMG layout)
+          mkdir -p /tmp/dmg_staging
+          cp -R "$APP_PATH" /tmp/dmg_staging/
+          ln -sf /Applications /tmp/dmg_staging/Applications
+
+          DMG_NAME="ClaudeUsageMonitor-v${VERSION}.dmg"
+
+          hdiutil create \
+            -volname "ClaudeUsageMonitor" \
+            -srcfolder /tmp/dmg_staging \
+            -ov -format UDZO \
+            "dist/$DMG_NAME"
+
+          echo "DMG_PATH=dist/$DMG_NAME" >> "$GITHUB_ENV"
+          echo "VERSION=$VERSION"        >> "$GITHUB_ENV"
+
+      # ── Release ─────────────────────────────────────────────────────────────
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Claude Usage Monitor v${{ env.VERSION }}"
+          files: ${{ env.DMG_PATH }}
+          generate_release_notes: true
+          body: |
+            ## Install
+
+            1. Download **ClaudeUsageMonitor-v${{ env.VERSION }}.dmg** below
+            2. Open the DMG and drag **ClaudeUsageMonitor** to **Applications**
+            3. **First launch only:** right-click the app → **Open** (required because the app is not notarized)
+
+            ## What's new
+            <!-- auto-generated from commits below -->
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

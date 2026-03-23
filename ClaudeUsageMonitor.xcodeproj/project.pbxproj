@@ -7,9 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		131AC9E7E8F564BB33DB286D /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E82B5738355BA39D1E9864A3 /* NotificationService.swift */; };
 		3E5836926A578410BB10D2BC /* UsageData.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA3E685FC065959767C79843 /* UsageData.swift */; };
+		80F14FDC983509A8E74FC8ED /* AppIcon_128.png in Resources */ = {isa = PBXBuildFile; fileRef = 1A0B24B9F71A399D1947B5FE /* AppIcon_128.png */; };
 		A67C19D5BA946388EAF48165 /* ClaudeUsageMonitorApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C474AFBE78EC7F5070C5874B /* ClaudeUsageMonitorApp.swift */; };
 		A8B2700E7F1063CEAE441A12 /* WebScrapingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FD4295EED2804845B35E6B7 /* WebScrapingService.swift */; };
+		BA46BB237A9B0627B2CB20E9 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 6BB1E308811B53F197A0E4FE /* AppIcon.icns */; };
 		BE196E6AA7BA22D9463F8F75 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1562A3CFCD83EE9BBE110AC /* AppDelegate.swift */; };
 		C6F008B4B0C2FA51A08BD434 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98237EC71645FF0A6506841E /* ContentView.swift */; };
 		EDE77099FED242BEA86746BE /* CircularProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F5D9542C42525C39B2586A4 /* CircularProgressView.swift */; };
@@ -17,17 +20,29 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		1A0B24B9F71A399D1947B5FE /* AppIcon_128.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = AppIcon_128.png; sourceTree = "<group>"; };
 		2F5D9542C42525C39B2586A4 /* CircularProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CircularProgressView.swift; sourceTree = "<group>"; };
 		4FD4295EED2804845B35E6B7 /* WebScrapingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebScrapingService.swift; sourceTree = "<group>"; };
+		6BB1E308811B53F197A0E4FE /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
 		98237EC71645FF0A6506841E /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		B009053A70EDBBF9EA0DAF9F /* ClaudeUsageMonitor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClaudeUsageMonitor.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C474AFBE78EC7F5070C5874B /* ClaudeUsageMonitorApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeUsageMonitorApp.swift; sourceTree = "<group>"; };
+		E82B5738355BA39D1E9864A3 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		F1562A3CFCD83EE9BBE110AC /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		F1DE12C61F8C55E73839CE45 /* LoginWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginWindowController.swift; sourceTree = "<group>"; };
 		FA3E685FC065959767C79843 /* UsageData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageData.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
+		27551130C613B863E3C990F6 /* Assets */ = {
+			isa = PBXGroup;
+			children = (
+				1A0B24B9F71A399D1947B5FE /* AppIcon_128.png */,
+				6BB1E308811B53F197A0E4FE /* AppIcon.icns */,
+			);
+			path = Assets;
+			sourceTree = "<group>";
+		};
 		3E57058566D4BD73A0ECBA49 /* Models */ = {
 			isa = PBXGroup;
 			children = (
@@ -56,6 +71,7 @@
 		E189EC1DBE99F718EE90F7CB /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				E82B5738355BA39D1E9864A3 /* NotificationService.swift */,
 				4FD4295EED2804845B35E6B7 /* WebScrapingService.swift */,
 			);
 			path = Services;
@@ -75,6 +91,7 @@
 				F1562A3CFCD83EE9BBE110AC /* AppDelegate.swift */,
 				C474AFBE78EC7F5070C5874B /* ClaudeUsageMonitorApp.swift */,
 				F1DE12C61F8C55E73839CE45 /* LoginWindowController.swift */,
+				27551130C613B863E3C990F6 /* Assets */,
 				3E57058566D4BD73A0ECBA49 /* Models */,
 				E189EC1DBE99F718EE90F7CB /* Services */,
 				C7D6EE5D95D840F2880FE1F2 /* Views */,
@@ -90,6 +107,7 @@
 			buildConfigurationList = 6AAC47FB21618A8DB1573CAC /* Build configuration list for PBXNativeTarget "ClaudeUsageMonitor" */;
 			buildPhases = (
 				397257E3EE10930A92B78018 /* Sources */,
+				DEE15C1EF6E8A13AAF59AFC2 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -135,6 +153,18 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		DEE15C1EF6E8A13AAF59AFC2 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BA46BB237A9B0627B2CB20E9 /* AppIcon.icns in Resources */,
+				80F14FDC983509A8E74FC8ED /* AppIcon_128.png in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		397257E3EE10930A92B78018 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -145,6 +175,7 @@
 				A67C19D5BA946388EAF48165 /* ClaudeUsageMonitorApp.swift in Sources */,
 				C6F008B4B0C2FA51A08BD434 /* ContentView.swift in Sources */,
 				F4A79DA9CC2CD8233449A810 /* LoginWindowController.swift in Sources */,
+				131AC9E7E8F564BB33DB286D /* NotificationService.swift in Sources */,
 				3E5836926A578410BB10D2BC /* UsageData.swift in Sources */,
 				A8B2700E7F1063CEAE441A12 /* WebScrapingService.swift in Sources */,
 			);

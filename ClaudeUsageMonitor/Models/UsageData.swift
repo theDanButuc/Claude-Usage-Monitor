@@ -47,4 +47,9 @@ struct UsageData {
         guard primaryLimit > 0 else { return "" }
         return "\(primaryUsed)/\(primaryLimit)"
     }
+
+    /// True when the last successful update is older than 10 minutes.
+    var isStale: Bool {
+        Date().timeIntervalSince(lastUpdated) > 600
+    }
 }
