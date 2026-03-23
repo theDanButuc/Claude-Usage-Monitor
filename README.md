@@ -2,7 +2,7 @@
 
 A native macOS menu-bar app that tracks your [Claude.ai](https://claude.ai) usage in real time — no API key needed.
 
-![App Icon](ClaudeUsageMonitor/Assets/AppIcon.icns)
+<img src="ClaudeUsageMonitor/Assets/AppIcon_128.png" width="128" alt="App Icon" />
 
 ---
 
@@ -30,8 +30,6 @@ Download **[ClaudeUsageMonitor.dmg](dist/ClaudeUsageMonitor.dmg)** from the `dis
 
 1. Double-click `ClaudeUsageMonitor.dmg` to mount it
 2. Drag **ClaudeUsageMonitor** into the **Applications** folder shortcut
-
-![drag-to-install](https://user-images.githubusercontent.com/placeholder/drag-install.png)
 
 ### Step 3 — First launch (Gatekeeper bypass)
 
