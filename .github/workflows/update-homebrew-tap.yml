@@ -1,0 +1,59 @@
+name: Update Homebrew Tap
+
+# Runs automatically after the "Build & Release" workflow finishes
+on:
+  workflow_run:
+    workflows: ["Build & Release"]
+    types: [completed]
+
+jobs:
+  update-tap:
+    name: Update cask version & SHA256
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Get release info
+        id: release
+        run: |
+          RELEASE=$(curl -s \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/latest")
+
+          VERSION=$(echo "$RELEASE" | jq -r '.tag_name' | sed 's/^v//')
+          DMG_URL=$(echo "$RELEASE" | jq -r '.assets[] | select(.name | endswith(".dmg")) | .browser_download_url')
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "dmg_url=$DMG_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Compute SHA256
+        id: sha
+        run: |
+          SHA=$(curl -sL "${{ steps.release.outputs.dmg_url }}" | shasum -a 256 | awk '{print $1}')
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout tap repo
+        uses: actions/checkout@v4
+        with:
+          repository: theDanButuc/homebrew-tap
+          token: ${{ secrets.TAP_GITHUB_TOKEN }}
+          path: tap
+
+      - name: Update cask file
+        run: |
+          VERSION="${{ steps.release.outputs.version }}"
+          SHA="${{ steps.sha.outputs.sha256 }}"
+          CASK="tap/Casks/claude-usage-monitor.rb"
+
+          sed -i "s/version \".*\"/version \"$VERSION\"/" "$CASK"
+          sed -i "s/sha256 \".*\"/sha256 \"$SHA\"/"       "$CASK"
+
+      - name: Commit and push
+        run: |
+          cd tap
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Casks/claude-usage-monitor.rb
+          git diff --staged --quiet || \
+            git commit -m "Update claude-usage-monitor to v${{ steps.release.outputs.version }}" && \
+            git push

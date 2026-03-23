@@ -3,6 +3,8 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject var service: WebScrapingService
 
+    @AppStorage("availableUpdate") private var availableUpdate: String = ""
+
     private var refreshIntervalLabel: String {
         let interval = UserDefaults.standard.double(forKey: "refreshInterval")
         let secs = interval > 0 ? interval : 120
@@ -20,6 +22,9 @@ struct ContentView: View {
 
             VStack(spacing: 0) {
                 header
+                if !availableUpdate.isEmpty {
+                    updateBanner
+                }
                 Divider().opacity(0.4)
                 scrollableContent
                 Divider().opacity(0.4)
@@ -97,6 +102,39 @@ struct ContentView: View {
             }
         }
         .padding(16)
+    }
+
+    // MARK: - Update banner
+
+    private var updateBanner: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "arrow.down.circle.fill")
+                .foregroundStyle(.blue)
+                .font(.system(size: 13))
+            Text("v\(availableUpdate) available")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.primary)
+            Spacer()
+            Button("View Release") {
+                NSWorkspace.shared.open(UpdateService.shared.releaseURL)
+                availableUpdate = ""
+            }
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(.blue)
+            .buttonStyle(.plain)
+
+            Button {
+                availableUpdate = ""
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(Color.blue.opacity(0.08))
     }
 
     // MARK: - Stale data banner

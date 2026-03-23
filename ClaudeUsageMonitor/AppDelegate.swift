@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private let service       = WebScrapingService.shared
     private let notifications = NotificationService.shared
+    private let updater       = UpdateService.shared
 
     // MARK: - Refresh interval (persisted in UserDefaults)
 
@@ -37,6 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupPopover()
         observeService()
         startApp()
+        checkForUpdates()
     }
 
     // MARK: - Status bar
@@ -242,6 +244,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         refreshTimer?.invalidate()
         refreshTimer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
             self?.service.refresh()
+        }
+    }
+
+    // MARK: - Update check
+
+    private func checkForUpdates() {
+        updater.checkForUpdates { version in
+            UserDefaults.standard.set(version, forKey: "availableUpdate")
         }
     }
 
