@@ -8,21 +8,19 @@ struct CircularProgressView: View {
 
     private var displayPercentage: Int { Int(progress * 100) }
 
-    // The gradient always spans 0 → 1 so the visible segment colour
-    // naturally transitions green → yellow → red as progress climbs.
-    // startAngle: 0° (not -90°) because the Circle also has .rotationEffect(-90°)
-    // which would shift the gradient by another 90° — the two cancel out correctly.
+    // Gradient starts at -90° (top/12 o'clock) — matches ProgressArc start angle exactly.
+    // No rotationEffect needed, so there is no double-rotation offset.
     private let trackGradient = AngularGradient(
         stops: [
-            .init(color: .green,  location: 0.0),
-            .init(color: .yellow, location: 0.5),
-            .init(color: .orange, location: 0.7),
+            .init(color: .green,  location: 0.00),
+            .init(color: .yellow, location: 0.50),
+            .init(color: .orange, location: 0.70),
             .init(color: .red,    location: 0.85),
-            .init(color: .red,    location: 1.0),
+            .init(color: .red,    location: 1.00),
         ],
         center: .center,
-        startAngle: .degrees(0),
-        endAngle:   .degrees(360)
+        startAngle: .degrees(-90),
+        endAngle:   .degrees(270)
     )
 
     var body: some View {
@@ -31,15 +29,27 @@ struct CircularProgressView: View {
             Circle()
                 .stroke(Color.primary.opacity(0.08), lineWidth: lineWidth)
 
-            // Coloured progress arc
-            Circle()
-                .trim(from: 0, to: max(0.005, progress))
+            // Coloured progress arc — custom Shape so startAngle is -90° by
+            // construction; no rotationEffect means the gradient angles align.
+            ProgressArc(progress: progress)
                 .stroke(
                     trackGradient,
                     style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                 )
-                .rotationEffect(.degrees(-90))
                 .animation(.spring(response: 0.7, dampingFraction: 0.8), value: progress)
+
+            // Green dot at arc origin (12 o'clock).
+            // The AngularGradient wraps at -90°/270° so the round start cap
+            // would show half-green / half-red. This dot covers that artefact.
+            GeometryReader { geo in
+                let side = min(geo.size.width, geo.size.height)
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: lineWidth, height: lineWidth)
+                    .position(x: geo.size.width / 2,
+                              y: (geo.size.height - side) / 2)
+            }
+            .opacity(progress > 0.01 ? 1 : 0)
 
             // Central labels
             VStack(spacing: 4) {
@@ -71,3 +81,30 @@ struct CircularProgressView: View {
     }
 }
 
+// MARK: - Arc Shape
+
+/// Draws a clockwise arc from -90° (12 o'clock) to the given progress fraction.
+/// Using a custom Shape avoids the need for `.rotationEffect` which would also
+/// rotate the AngularGradient and misalign its colours.
+private struct ProgressArc: Shape {
+    var progress: Double
+
+    var animatableData: Double {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let radius = min(rect.width, rect.height) / 2
+        return Path { p in
+            p.addArc(
+                center:     center,
+                radius:     radius,
+                startAngle: .degrees(-90),
+                endAngle:   .degrees(-90 + 360 * max(0.005, progress)),
+                clockwise:  false
+            )
+        }
+    }
+}
