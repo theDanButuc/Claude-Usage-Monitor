@@ -19,7 +19,11 @@ A native macOS menu-bar app that tracks your [Claude.ai](https://claude.ai) usag
 - **Colour-coded tree icon** — green → yellow → red as usage climbs
 - **Popover dashboard** — circular progress ring, reset countdown, stats cards
 - **Session-aware** — captures Claude's internal rate-limit window via a fetch interceptor, not just the billing-period total
-- **Auto-refresh** every 5 minutes; manual Refresh button in the popover
+- **Configurable auto-refresh** — 30s / 1m / 2m / 5m / 10m, set via right-click menu
+- **Native notifications** — alerts at 80%, 90%, 100% usage and on session reset
+- **Stale data indicator** — icon turns grey and shows ⚠ if data is older than 10 minutes
+- **Right-click context menu** — quick usage info and settings without opening the popover
+- **In-app update banner** — notified when a new version is available on GitHub
 - **Persisted login** — WebKit stores your Claude session automatically; you only log in once
 
 ---
@@ -30,7 +34,7 @@ A native macOS menu-bar app that tracks your [Claude.ai](https://claude.ai) usag
 
 ### Step 1 — Download
 
-Download **[ClaudeUsageMonitor.dmg](dist/ClaudeUsageMonitor.dmg)** from the `dist/` folder in this repository.
+Download the latest **ClaudeUsageMonitor.dmg** from the [Releases page](https://github.com/theDanButuc/Claude-Usage-Monitor/releases/latest).
 
 ### Step 2 — Install
 
@@ -60,6 +64,13 @@ open /Applications/ClaudeUsageMonitor.app
 
 A browser window opens automatically on first run. Log in to your Claude.ai account normally. The window closes by itself when login succeeds and the tree icon appears in your menu bar.
 
+### Homebrew (alternative)
+
+```bash
+brew tap theDanButuc/tap
+brew install --cask claude-usage-monitor
+```
+
 ---
 
 ## Usage
@@ -69,8 +80,9 @@ A browser window opens automatically on first run. Log in to your Claude.ai acco
 | 🌲 **Green** `45/100` | Plenty of messages left (< 50 % used) |
 | 🌲 **Yellow** `67/100` | Getting there (50 – 80 % used) |
 | 🌲 **Red** `88/100` | Almost out (> 80 % used) |
+| 🌲 **Grey** `⚠ 45/100` | Data is stale (last update > 10 min ago) |
 
-Click the icon to open the popover:
+**Left-click** the icon to open the popover:
 
 - **Circular ring** — current session usage percentage
 - **Resets in X h Y m** — time until the next usage window resets
@@ -78,6 +90,13 @@ Click the icon to open the popover:
 - **Rate limit badge** — Normal / Limited
 - **Refresh button** (↻) — force an immediate scrape
 - **Quit button** — exit the app
+
+**Right-click** the icon for a quick context menu:
+
+- Current usage and reset countdown at a glance
+- **Refresh Interval** submenu — choose 30s / 1m / 2m / 5m / 10m (persisted across launches)
+- **Refresh Now** — immediate refresh
+- **Quit**
 
 ---
 
@@ -99,7 +118,7 @@ bash scripts/build.sh             # native arch (arm64 or x86_64)
 bash scripts/build.sh --universal # universal binary (arm64 + x86_64)
 ```
 
-Produces `dist/ClaudeUsageMonitor-v1.1.0.dmg` ready to install.
+Produces `dist/ClaudeUsageMonitor-vX.X.X.dmg` ready to install.
 
 ### Regenerate the app icon
 
@@ -150,12 +169,14 @@ A JavaScript **fetch/XHR interceptor** is injected at document start, before any
 ClaudeUsageMonitor/
 ├── ClaudeUsageMonitor/
 │   ├── ClaudeUsageMonitorApp.swift   # @main entry point
-│   ├── AppDelegate.swift             # Status bar, popover, timer
+│   ├── AppDelegate.swift             # Status bar, popover, refresh timer
 │   ├── LoginWindowController.swift   # Full-screen login WebView
 │   ├── Models/
 │   │   └── UsageData.swift           # Data model + computed helpers
 │   ├── Services/
-│   │   └── WebScrapingService.swift  # WKWebView + JS interceptor
+│   │   ├── WebScrapingService.swift  # WKWebView + JS interceptor
+│   │   ├── NotificationService.swift # Usage threshold & reset notifications
+│   │   └── UpdateService.swift       # GitHub Releases update check
 │   ├── Views/
 │   │   ├── ContentView.swift         # Popover UI
 │   │   └── CircularProgressView.swift
@@ -168,10 +189,9 @@ ClaudeUsageMonitor/
 │   └── make_icon.swift               # Icon generator (Swift script)
 ├── screenshots/
 │   └── popover.png                   # App screenshot
-├── dist/
-│   └── ClaudeUsageMonitor.dmg        # Pre-built installer
 ├── .github/workflows/
-│   └── release.yml                   # CI: build & publish DMG on git tag
+│   ├── release.yml                   # CI: build & publish DMG on git tag
+│   └── update-homebrew-tap.yml       # CI: update Homebrew cask after release
 ├── project.yml                        # XcodeGen spec
 └── .gitignore
 ```
