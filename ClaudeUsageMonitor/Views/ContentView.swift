@@ -48,9 +48,6 @@ struct ContentView: View {
 
             Spacer()
 
-            if let data = service.usageData, data.planType.lowercased() != "unknown" {
-                planBadge(data.planType)
-            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -85,7 +82,7 @@ struct ContentView: View {
     // MARK: - Main scrollable area
 
     private var scrollableContent: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 16) {
             if service.isLoading && service.usageData == nil {
                 loadingView
             } else if let msg = service.errorMessage, service.usageData == nil {
@@ -94,13 +91,7 @@ struct ContentView: View {
                 if let data = service.usageData, data.isStale {
                     staleBanner
                 }
-                progressSection
-                if let data = service.usageData {
-                    TimelineView(.periodic(from: .now, by: 60)) { _ in
-                        resetRow(data)
-                    }
-                    statsRow(data)
-                }
+                barsSection
             }
         }
         .padding(16)
@@ -192,110 +183,143 @@ struct ContentView: View {
         .padding(.vertical, 32)
     }
 
-    // MARK: - Progress ring
+    // MARK: - Bars section
 
-    private var progressSection: some View {
-        let data  = service.usageData
-        // Show current session window when available, billing period otherwise
-        let used  = data?.primaryUsed  ?? 0
-        let limit = data?.primaryLimit ?? 0
-        let pct   = data?.usagePercentage ?? 0
+    private var barsSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Plan usage limits")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.primary)
+                .padding(.bottom, 14)
 
-        return VStack(spacing: 6) {
-            CircularProgressView(
-                progress:      pct,
-                messagesUsed:  used,
-                messagesLimit: limit
-            )
-            .frame(width: 170, height: 170)
-            .frame(maxWidth: .infinity)
-            .overlay(alignment: .topTrailing) {
-                if service.isLoading {
+            if let data = service.usageData {
+                TimelineView(.periodic(from: .now, by: 60)) { _ in
+                    VStack(spacing: 0) {
+                        // Current session bar
+                        usageBarRow(
+                            title: "Current session",
+                            resetLabel: data.sessionResetLabel,
+                            used: data.sessionUsed,
+                            limit: data.sessionLimit,
+                            progress: data.sessionPercentage
+                        )
+
+                        Divider()
+                            .opacity(0.3)
+                            .padding(.vertical, 14)
+
+                        // Weekly limits section
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Weekly limits")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.secondary)
+
+                            usageBarRow(
+                                title: "All models",
+                                resetLabel: data.weeklyResetLabel,
+                                used: data.messagesUsed,
+                                limit: data.messagesLimit,
+                                progress: data.weeklyPercentage
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .background(Color.primary.opacity(0.04))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            service.isLoading
+                ? AnyView(
                     ProgressView()
-                        .scaleEffect(0.7)
-                        .offset(x: 4, y: -4)
+                        .scaleEffect(0.6)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                        .padding(8)
+                  )
+                : AnyView(EmptyView())
+        )
+    }
+
+    private func usageBarRow(
+        title: String,
+        resetLabel: String?,
+        used: Int,
+        limit: Int,
+        progress: Double
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.primary)
+                    if let label = resetLabel {
+                        Text(label)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    } else if limit == 0 {
+                        Text("No data")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                Spacer()
+                if limit > 0 {
+                    Text("\(Int(progress * 100))% used")
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
                 }
             }
 
-            if let data = service.usageData {
-                Text(data.hasSessionData ? "Current session" : "Billing period")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
-            }
-        }
-    }
+            if limit > 0 {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.primary.opacity(0.10))
+                            .frame(height: 8)
 
-    // MARK: - Reset countdown row
-
-    private func resetRow(_ data: UsageData) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: "clock.fill")
-                .foregroundStyle(.secondary)
-                .font(.system(size: 13))
-            Text("Resets in")
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
-            Text(data.timeUntilReset)
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .foregroundStyle(.primary)
-            Spacer()
-            // Remaining count pill
-            Text("\(data.messagesRemaining) left")
-                .font(.system(size: 11, weight: .medium, design: .rounded))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(Color.primary.opacity(0.08))
-                .clipShape(Capsule())
-        }
-        .padding(12)
-        .background(Color.primary.opacity(0.04))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-    }
-
-    // MARK: - Stats cards row
-
-    private func statsRow(_ data: UsageData) -> some View {
-        HStack(spacing: 10) {
-            if data.hasSessionData && data.messagesLimit > 0 {
-                // Session shown in ring; show the billing-period total in the card
-                statCard(icon: "calendar",
-                         label: "Period total",
-                         value: "\(data.messagesUsed)/\(data.messagesLimit)",
-                         color: .blue)
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(barColor(for: progress))
+                            .frame(width: max(8, geo.size.width * CGFloat(progress)), height: 8)
+                            .animation(.spring(response: 0.7, dampingFraction: 0.8), value: progress)
+                    }
+                }
+                .frame(height: 8)
             } else {
-                statCard(icon: "chart.bar.fill",
-                         label: "Remaining",
-                         value: data.primaryLimit > 0 ? "\(data.messagesRemaining)" : "—",
-                         color: .blue)
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color.primary.opacity(0.10))
+                    .frame(height: 8)
             }
-            statCard(
-                icon: "bolt.fill",
-                label: "Rate limit",
-                value: data.rateLimitStatus,
-                color: data.rateLimitStatus == "Limited" ? .orange : .green
-            )
         }
     }
 
-    private func statCard(icon: String, label: String, value: String, color: Color) -> some View {
+    private func barColor(for progress: Double) -> Color {
+        switch progress {
+        case 0.8...: return .red
+        case 0.5...: return .orange
+        default:     return .green
+        }
+    }
+
+    // MARK: - Rate limit card
+
+    private func rateLimitCard(_ data: UsageData) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: icon)
-                .foregroundStyle(color)
-                .font(.system(size: 14))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label)
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
-                Text(value)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
-            }
+            Image(systemName: data.rateLimitStatus == "Limited" ? "bolt.slash.fill" : "bolt.fill")
+                .foregroundStyle(data.rateLimitStatus == "Limited" ? .orange : .green)
+                .font(.system(size: 13))
+            Text("Rate limit")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+            Text(data.rateLimitStatus)
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .foregroundStyle(data.rateLimitStatus == "Limited" ? .orange : .primary)
             Spacer()
         }
-        .padding(10)
-        .frame(maxWidth: .infinity)
-        .background(Color.primary.opacity(0.05))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(Color.primary.opacity(0.04))
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 
@@ -360,4 +384,3 @@ struct ContentView: View {
         }
     }
 }
-

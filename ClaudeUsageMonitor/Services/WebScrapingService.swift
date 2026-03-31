@@ -60,7 +60,7 @@ private let kDOMExtractionJS = """
     var r = {
         planType: 'Unknown', messagesUsed: -1, messagesLimit: -1,
         sessionUsed: -1, sessionLimit: -1,
-        resetDateStr: '', sessionResetStr: '',
+        resetDateStr: '', sessionResetStr: '', weeklyResetStr: '',
         rateLimitStatus: 'Normal', needsLogin: false, source: 'dom',
         rawText: ''
     };
@@ -151,9 +151,13 @@ private let kDOMExtractionJS = """
         }
 
         // Reset dates
+        // Weekly reset: "Resets Fri 10:00 AM" or "Resets on December 25"
+        var wr = body.match(/resets?\\s+((?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\\s+\\d{1,2}:\\d{2}\\s*(?:AM|PM))/i);
+        if (wr) r.weeklyResetStr = wr[1].trim();
         var rd = body.match(/resets?\\s+(?:on\\s+)?([A-Z][a-z]+\\s+\\d{1,2}(?:,?\\s*\\d{4})?)/i);
         if (rd) r.resetDateStr = rd[1].trim();
-        var sd = body.match(/(?:window|session|rate.?limit)\\s+resets?\\s+(?:in\\s+)?([^\\n.]{3,40})/i);
+        // Session reset: "Resets in 4 hr 29 min"
+        var sd = body.match(/resets?\\s+in\\s+(\\d[^\\n.]{2,30})/i);
         if (sd) r.sessionResetStr = sd[1].trim();
 
         if (/rate\\s+limit(?:ed)?/i.test(body)) r.rateLimitStatus = 'Limited';
@@ -326,10 +330,12 @@ for c in (candidates + nestedCandidates) {
         let rateLimitStatus  = j["rateLimitStatus"]  as? String ?? "Normal"
         let resetDateStr     = j["resetDateStr"]     as? String ?? ""
         let sessionResetStr  = j["sessionResetStr"]  as? String ?? ""
+        let weeklyResetStr   = j["weeklyResetStr"]   as? String ?? ""
 
         var resetDate: Date?
+        var weeklyResetDate: Date?
 
-        // 1. Try absolute date string: "resets on December 25"
+        // 1. Absolute date string: "resets on December 25" → billing-period / weekly reset
         if !resetDateStr.isEmpty {
             let fmts = ["MMMM d, yyyy", "MMMM d", "MMM d, yyyy", "MMM d"]
             let df = DateFormatter(); df.locale = Locale(identifier: "en_US_POSIX")
@@ -337,7 +343,7 @@ for c in (candidates + nestedCandidates) {
                 df.dateFormat = fmt
                 if let d = df.date(from: resetDateStr) {
                     let comps = Calendar.current.dateComponents([.month, .day], from: d)
-                    resetDate = Calendar.current.nextDate(
+                    weeklyResetDate = Calendar.current.nextDate(
                         after: Date(), matching: comps,
                         matchingPolicy: .nextTimePreservingSmallerComponents) ?? d
                     break
@@ -345,8 +351,8 @@ for c in (candidates + nestedCandidates) {
             }
         }
 
-        // 2. Try relative duration string: "2 hours", "30 minutes", "1 day", "2h 30m"
-        if resetDate == nil, !sessionResetStr.isEmpty {
+        // 2. Relative duration string: "2 hours", "30 minutes" → session reset
+        if !sessionResetStr.isEmpty {
             resetDate = parseRelativeDuration(sessionResetStr)
         }
 
@@ -367,7 +373,9 @@ for c in (candidates + nestedCandidates) {
             data.sessionUsed  = sessionUsed
             data.sessionLimit = sessionLimit
         }
-        if resetDate != nil && data.resetDate == nil { data.resetDate = resetDate }
+        if let rd = resetDate, data.resetDate == nil { data.resetDate = rd }
+        if let wd = weeklyResetDate { data.weeklyResetDate = wd }
+        if !weeklyResetStr.isEmpty { data.weeklyResetText = weeklyResetStr }
         data.rateLimitStatus = rateLimitStatus
         data.lastUpdated = Date()
 

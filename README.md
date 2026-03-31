@@ -15,13 +15,13 @@ A native macOS menu-bar app that tracks your [Claude.ai](https://claude.ai) usag
 ## Features
 
 - **Menu-bar only** — no Dock icon, stays out of your way
-- **Live usage counter** — shows `used/limit` (e.g. `45/100`) right in the menu bar
-- **Colour-coded tree icon** — green → yellow → red as usage climbs
-- **Popover dashboard** — circular progress ring, reset countdown, stats cards
+- **Live percentage display** — shows `x% | y%` (Current session % | Weekly %) right in the menu bar
+- **Colour-coded tree icon** — green → orange → red as usage climbs
+- **Two-bar dashboard** — separate horizontal bars for Current session and Weekly limits, each with reset timing
 - **Session-aware** — captures Claude's internal rate-limit window via a fetch interceptor, not just the billing-period total
+- **Reset countdowns** — "Resets in X hr Y min" for the session window; "Resets Fri 10:00 AM" for weekly limits
 - **Configurable auto-refresh** — 30s / 1m / 2m / 5m / 10m, set via right-click menu
 - **Native notifications** — alerts at 80%, 90%, 100% usage and on session reset
-- **Live reset countdown** — "Resets in Xh Ym" updates every minute while the popover is open; reset time sourced directly from Claude's API
 - **Stale data indicator** — icon turns grey and shows ⚠ if data is older than 10 minutes
 - **Right-click context menu** — quick usage info and settings without opening the popover
 - **In-app update banner** — notified when a new version is available on GitHub
@@ -78,17 +78,18 @@ brew install --cask claude-usage-monitor
 
 | Element | Meaning |
 |---------|---------|
-| 🌲 **Green** `45/100` | Plenty of messages left (< 50 % used) |
-| 🌲 **Yellow** `67/100` | Getting there (50 – 80 % used) |
-| 🌲 **Red** `88/100` | Almost out (> 80 % used) |
-| 🌲 **Grey** `⚠ 45/100` | Data is stale (last update > 10 min ago) |
+| 🌲 **Green** `12% \| 24%` | Plenty of messages left (< 50 % used) |
+| 🌲 **Orange** `55% \| 62%` | Getting there (50 – 80 % used) |
+| 🌲 **Red** `88% \| 91%` | Almost out (> 80 % used) |
+| 🌲 **Grey** `⚠ 12% \| 24%` | Data is stale (last update > 10 min ago) |
+
+The two percentages are: **Current session %** | **Weekly limits %**
 
 **Left-click** the icon to open the popover:
 
-- **Circular ring** — current session usage percentage
-- **Resets in X h Y m** — time until the next usage window resets
-- **Period total card** — billing-period total (when session data is available separately)
-- **Rate limit badge** — Normal / Limited
+- **Plan usage limits** section with two progress bars:
+  - **Current session** — rate-limit window usage with "Resets in X hr Y min" countdown
+  - **Weekly limits / All models** — billing-period usage with "Resets Fri HH:MM AM" date
 - **Refresh button** (↻) — force an immediate scrape
 - **Quit button** — exit the app
 
@@ -179,7 +180,7 @@ ClaudeUsageMonitor/
 │   │   ├── NotificationService.swift # Usage threshold & reset notifications
 │   │   └── UpdateService.swift       # GitHub Releases update check
 │   ├── Views/
-│   │   ├── ContentView.swift         # Popover UI
+│   │   ├── ContentView.swift         # Popover UI (two-bar dashboard)
 │   │   └── CircularProgressView.swift
 │   ├── Assets/
 │   │   └── AppIcon.icns              # All 10 icon sizes
