@@ -220,6 +220,10 @@ class WebScrapingService: NSObject, ObservableObject {
         isLoading = true
         usageData?.sessionUsed  = 0
         usageData?.sessionLimit = 0
+        // Clear stale reset dates so a past date doesn't linger while reloading
+        usageData?.resetDate = nil
+        usageData?.weeklyResetDate = nil
+        usageData?.weeklyResetText = ""
         scrapeWebView.load(URLRequest(url: usageURL))
     }
 
@@ -309,7 +313,9 @@ for c in (candidates + nestedCandidates) {
                 )
                 data.sessionUsed  = u
                 data.sessionLimit = l
-                if let rd = resetDate { data.resetDate = rd }
+                // Only update resetDate if it's in the future — a past date means
+                // the window already reset and we'd show "Resets soon" incorrectly.
+                if let rd = resetDate, rd > Date() { data.resetDate = rd }
                 data.lastUpdated  = Date()
                 self.usageData  = data
                 self.isLoading  = false

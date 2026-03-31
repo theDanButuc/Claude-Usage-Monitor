@@ -52,11 +52,11 @@ struct UsageData {
         return "< 1m"
     }
 
-    /// "Resets in 4 hr 29 min" for the session bar
+    /// "Resets in 4 hr 29 min" for the session bar, nil if unknown or already past
     var sessionResetLabel: String? {
         guard let date = resetDate else { return nil }
         let secs = date.timeIntervalSince(Date())
-        guard secs > 0 else { return "Resets soon" }
+        guard secs > 60 else { return nil }   // past or < 1 min — hide rather than show "Soon"
         let totalMins = Int(secs / 60)
         let h = totalMins / 60
         let m = totalMins % 60
