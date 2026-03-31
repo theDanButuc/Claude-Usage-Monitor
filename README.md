@@ -15,13 +15,14 @@ A native macOS menu-bar app that tracks your [Claude.ai](https://claude.ai) usag
 ## Features
 
 - **Menu-bar only** — no Dock icon, stays out of your way
-- **Live percentage display** — shows `x% | y%` (Current session % | Weekly %) right in the menu bar
+- **Burn rate display** — menu bar shows estimated time left (`~45min left | 42%`) based on actual usage pace; falls back to percentage when idle
 - **Colour-coded tree icon** — green → orange → red as usage climbs
 - **Two-bar dashboard** — separate horizontal bars for Current session and Weekly limits, each with reset timing
 - **Session-aware** — captures Claude's internal rate-limit window via a fetch interceptor, not just the billing-period total
 - **Reset countdowns** — "Resets in X hr Y min" for the session window; "Resets [Day] [Time]" for weekly limits — sourced directly from claude.ai
 - **Configurable auto-refresh** — 30s / 1m / 2m / 5m / 10m, set via right-click menu
-- **Native notifications** — alerts at 80%, 90%, 100% usage and on session reset
+- **Native notifications** — contextual alerts at 75%, 80%, 90%, 95%, 100% usage and on session reset
+- **Smart tip banner** — dismissable in-popover tip that updates as usage climbs (75→80→90→95%)
 - **Stale data indicator** — icon turns grey and shows ⚠ if data is older than 10 minutes
 - **Right-click context menu** — quick usage info and settings without opening the popover
 - **In-app update banner** — notified when a new version is available on GitHub
@@ -79,11 +80,11 @@ brew install --cask claude-usage-monitor
 | Element | Meaning |
 |---------|---------|
 | 🌲 **Green** `12% \| 24%` | Plenty of messages left (< 50 % used) |
-| 🌲 **Orange** `55% \| 62%` | Getting there (50 – 80 % used) |
-| 🌲 **Red** `88% \| 91%` | Almost out (> 80 % used) |
-| 🌲 **Grey** `⚠ 12% \| 24%` | Data is stale (last update > 10 min ago) |
+| 🌲 **Orange** `~45min left \| 62%` | Burn rate active — estimated time left shown |
+| 🌲 **Red** `~8min left \| 91%` | Almost out — act fast |
+| 🌲 **Grey** `⚠ ~45min left \| 24%` | Data is stale (last update > 10 min ago) |
 
-The two percentages are: **Current session %** | **Weekly limits %**
+The left value shows **estimated time left** (burn rate) when active, or **Current session %** when idle. The right value is always **Weekly limits %**.
 
 **Left-click** the icon to open the popover:
 
