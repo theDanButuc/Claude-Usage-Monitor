@@ -219,9 +219,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         service.$usageData
             .receive(on: DispatchQueue.main)
             .sink { [weak self] data in
-                self?.updateIcon(data: data)
-                if let data = data {
-                    self?.notifications.checkAndNotify(data: data)
+                guard let self else { return }
+                if var data = data {
+                    // Burn rate: detect session reset (pct dropped) → clear history
+                    let lastPct = self.service.usageData?.usageHistory.last?.pct ?? 0
+                    if data.sessionPercentage < lastPct - 0.01 {
+                        data.usageHistory.removeAll()
+                    } else {
+                        data.usageHistory = self.service.usageData?.usageHistory ?? []
+                    }
+                    // Append current point
+                    data.usageHistory.append((date: Date(), pct: data.sessionPercentage))
+                    if data.usageHistory.count > 10 { data.usageHistory.removeFirst() }
+
+                    self.service.usageData = data
+                    self.updateIcon(data: data)
+                    self.notifications.checkAndNotify(data: data)
+                } else {
+                    self.updateIcon(data: nil)
                 }
             }
             .store(in: &cancellables)

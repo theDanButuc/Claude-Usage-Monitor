@@ -12,12 +12,14 @@ struct UsageData {
     var rateLimitStatus: String
     var lastUpdated:     Date
 
+    // MARK: - Burn rate history
+    // Rolling window of (timestamp, sessionPercentage) — max 10 points
+    var usageHistory: [(date: Date, pct: Double)] = []
+
     // MARK: - Computed
 
     var hasSessionData: Bool { sessionLimit > 0 }
 
-    /// What to show in the menu bar primary percentage:
-    /// session window when available, billing period as fallback.
     var primaryUsed:  Int { hasSessionData ? sessionUsed  : messagesUsed  }
     var primaryLimit: Int { hasSessionData ? sessionLimit : messagesLimit }
 
@@ -38,6 +40,45 @@ struct UsageData {
 
     var messagesRemaining: Int { max(0, primaryLimit - primaryUsed) }
 
+    // MARK: - Burn rate
+
+    /// Messages-per-minute consumed based on rolling history.
+    /// Returns nil if < 2 points or < 5 minutes of data (too noisy).
+    var burnRatePerMinute: Double? {
+        guard usageHistory.count >= 2 else { return nil }
+        let oldest = usageHistory.first!
+        let newest = usageHistory.last!
+        let minutes = newest.date.timeIntervalSince(oldest.date) / 60.0
+        guard minutes >= 5 else { return nil }
+        let consumed = newest.pct - oldest.pct
+        guard consumed > 0 else { return nil }
+        return consumed / minutes
+    }
+
+    /// Estimated minutes until session hits 100%, capped at actual resetDate.
+    var estimatedMinutesRemaining: Double? {
+        guard let rate = burnRatePerMinute, rate > 0 else { return nil }
+        let remaining = 1.0 - sessionPercentage
+        let estimated = remaining / rate
+        if let reset = resetDate {
+            let actual = reset.timeIntervalSince(Date()) / 60.0
+            guard actual > 0 else { return nil }
+            return min(estimated, actual)
+        }
+        return estimated
+    }
+
+    /// "~45min left" or "~2h 3m left" — nil if burn rate unavailable
+    var burnRateLabel: String? {
+        guard let mins = estimatedMinutesRemaining else { return nil }
+        if mins < 60 { return "~\(Int(mins))min left" }
+        let h = Int(mins / 60)
+        let m = Int(mins.truncatingRemainder(dividingBy: 60))
+        return m > 0 ? "~\(h)h \(m)m left" : "~\(h)h left"
+    }
+
+    // MARK: - Reset labels
+
     var timeUntilReset: String {
         guard let resetDate else { return "—" }
         let secs = resetDate.timeIntervalSince(Date())
@@ -52,11 +93,10 @@ struct UsageData {
         return "< 1m"
     }
 
-    /// "Resets in 4 hr 29 min" for the session bar, nil if unknown or already past
     var sessionResetLabel: String? {
         guard let date = resetDate else { return nil }
         let secs = date.timeIntervalSince(Date())
-        guard secs > 60 else { return nil }   // past or < 1 min — hide rather than show "Soon"
+        guard secs > 60 else { return nil }
         let totalMins = Int(secs / 60)
         let h = totalMins / 60
         let m = totalMins % 60
@@ -64,7 +104,6 @@ struct UsageData {
         return "Resets in \(m) min"
     }
 
-    /// "Resets Fri 10:00 AM" for the weekly bar
     var weeklyResetLabel: String? {
         if !weeklyResetText.isEmpty { return "Resets \(weeklyResetText)" }
         guard let date = weeklyResetDate else { return nil }
@@ -78,11 +117,17 @@ struct UsageData {
         return f.string(from: lastUpdated)
     }
 
-    /// "x% | y%" for the macOS menu bar (Current session | Weekly limits)
+    // MARK: - Menu bar label
+    // Session side: burn rate label if available, otherwise percentage
     var menuBarLabel: String {
-        let sPct = hasSessionData ? "\(Int(sessionPercentage * 100))%" : nil
+        let sessionStr: String?
+        if hasSessionData {
+            sessionStr = burnRateLabel ?? "\(Int(sessionPercentage * 100))%"
+        } else {
+            sessionStr = nil
+        }
         let wPct = messagesLimit > 0 ? "\(Int(weeklyPercentage * 100))%" : nil
-        switch (sPct, wPct) {
+        switch (sessionStr, wPct) {
         case let (s?, w?): return "\(s) | \(w)"
         case let (s?, nil): return s
         case let (nil, w?): return w
@@ -90,7 +135,26 @@ struct UsageData {
         }
     }
 
-    /// True when the last successful update is older than 10 minutes.
+    // MARK: - Smart tip
+
+    var smartTip: String? {
+        let pct = sessionPercentage * 100
+        switch pct {
+        case 95...:
+            return "Save your work — almost out. \(sessionResetLabel ?? "Resets soon")."
+        case 90..<95:
+            return "90%+ used. Finish current task, avoid starting anything new."
+        case 80..<90:
+            return "80%+ used. Skip file uploads and long threads."
+        case 75..<80:
+            return "75%+ used. Start new conversations for new topics."
+        default:
+            return nil
+        }
+    }
+
+    // MARK: - Stale
+
     var isStale: Bool {
         Date().timeIntervalSince(lastUpdated) > 600
     }

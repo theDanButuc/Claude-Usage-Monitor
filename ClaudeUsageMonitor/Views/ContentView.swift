@@ -4,6 +4,8 @@ struct ContentView: View {
     @EnvironmentObject var service: WebScrapingService
 
     @AppStorage("availableUpdate") private var availableUpdate: String = ""
+    @State private var tipDismissed = false
+    @State private var lastTipThreshold = 0
 
     private var refreshIntervalLabel: String {
         let interval = UserDefaults.standard.double(forKey: "refreshInterval")
@@ -91,6 +93,7 @@ struct ContentView: View {
                 if let data = service.usageData, data.isStale {
                     staleBanner
                 }
+                smartTipBanner
                 barsSection
             }
         }
@@ -181,6 +184,53 @@ struct ContentView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 32)
+    }
+
+    // MARK: - Smart tip banner
+
+    private var smartTipBanner: some View {
+        Group {
+            if let tip = service.usageData?.smartTip, !tipDismissed {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "lightbulb.fill")
+                        .foregroundStyle(.orange)
+                        .font(.system(size: 12))
+                    Text(tip)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer()
+                    Button {
+                        tipDismissed = true
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(10)
+                .background(Color.orange.opacity(0.10))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .onChange(of: thresholdLevel(service.usageData?.sessionPercentage ?? 0)) { newLevel in
+                    if newLevel > lastTipThreshold {
+                        tipDismissed = false
+                        lastTipThreshold = newLevel
+                    }
+                }
+            }
+        }
+    }
+
+    /// Maps session percentage to a threshold level (0=none,1=75%,2=80%,3=90%,4=95%)
+    private func thresholdLevel(_ pct: Double) -> Int {
+        switch pct * 100 {
+        case 95...: return 4
+        case 90...: return 3
+        case 80...: return 2
+        case 75...: return 1
+        default:    return 0
+        }
     }
 
     // MARK: - Bars section
