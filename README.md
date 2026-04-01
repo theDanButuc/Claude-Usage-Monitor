@@ -6,7 +6,9 @@ A native macOS menu-bar app that tracks your [Claude.ai](https://claude.ai) usag
 
 ---
 
-## Screenshot
+## Demo
+
+<img src="screenshots/Claude Usage.gif" alt="ClaudeUsageMonitor demo" />
 
 <img src="screenshots/popover.png" width="260" alt="ClaudeUsageMonitor popover" />
 
