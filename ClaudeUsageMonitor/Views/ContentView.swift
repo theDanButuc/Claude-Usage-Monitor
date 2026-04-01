@@ -40,9 +40,12 @@ struct ContentView: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            Image(systemName: "tree.fill")
-                .foregroundStyle(iconColor)
-                .font(.system(size: 16, weight: .semibold))
+            Image(nsImage: {
+                let img = NSImage(named: NSImage.applicationIconName) ?? NSImage()
+                let copy = img.copy() as! NSImage
+                copy.size = NSSize(width: 20, height: 20)
+                return copy
+            }())
 
             Text("Claude Usage")
                 .font(.system(size: 14, weight: .semibold))
@@ -426,11 +429,4 @@ struct ContentView: View {
 
     // MARK: - Helpers
 
-    private var iconColor: Color {
-        switch service.usageData?.usagePercentage ?? 0 {
-        case 0.8...: return .red
-        case 0.5...: return .orange
-        default:     return .green
-        }
-    }
 }
