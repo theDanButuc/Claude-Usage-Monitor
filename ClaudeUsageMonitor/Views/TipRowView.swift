@@ -33,7 +33,7 @@ struct TipRowView: View {
                             HStack(spacing: 4) {
                                 Image(systemName: copiedIndex == index ? "checkmark" : "doc.on.doc")
                                     .font(.system(size: 9))
-                                Text(copiedIndex == index ? "Copied!" : action.label)
+                                Text(copiedIndex == index ? "Copied!" : "Copy → \(action.label)")
                                     .font(.system(size: 10))
                             }
                             .padding(.horizontal, 8)

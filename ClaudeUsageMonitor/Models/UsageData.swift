@@ -163,14 +163,14 @@ struct UsageData {
         if pct >= 40 {
             tips.append(UsageTip(
                 icon: "bolt.fill",
-                message: "Optimize your current session to free up context:",
+                message: "Compress your session to free up context. Copy the prompt and send it in your current conversation:",
                 actions: [
                     TipAction(
-                        label: "Copy for claude.ai",
+                        label: "claude.ai",
                         copyText: "Please summarize our conversation so far in under 200 words so we can continue efficiently."
                     ),
                     TipAction(
-                        label: "Copy for Claude Code",
+                        label: "Claude Code",
                         copyText: "/compact"
                     )
                 ]
