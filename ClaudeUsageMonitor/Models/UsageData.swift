@@ -135,22 +135,81 @@ struct UsageData {
         }
     }
 
-    // MARK: - Smart tip
+    // MARK: - Tips
 
-    var smartTip: String? {
+    struct UsageTip {
+        let icon: String
+        let message: String
+        let actions: [TipAction]
+    }
+
+    struct TipAction {
+        let label: String
+        let copyText: String
+    }
+
+    var currentTips: [UsageTip] {
         let pct = sessionPercentage * 100
-        switch pct {
-        case 95...:
-            return "Save your work — almost out. \(sessionResetLabel ?? "Resets soon")."
-        case 90..<95:
-            return "90%+ used. Finish current task, avoid starting anything new."
-        case 80..<90:
-            return "80%+ used. Skip file uploads and long threads."
-        case 75..<80:
-            return "75%+ used. Start new conversations for new topics."
-        default:
-            return nil
+        var tips: [UsageTip] = []
+
+        if pct >= 20 {
+            tips.append(UsageTip(
+                icon: "arrow.triangle.2.circlepath",
+                message: "Start a new conversation for each new topic to keep context small and responses fast.",
+                actions: []
+            ))
         }
+
+        if pct >= 40 {
+            tips.append(UsageTip(
+                icon: "bolt.fill",
+                message: "Optimize your current session to free up context:",
+                actions: [
+                    TipAction(
+                        label: "Copy for claude.ai",
+                        copyText: "Please summarize our conversation so far in under 200 words so we can continue efficiently."
+                    ),
+                    TipAction(
+                        label: "Copy for Claude Code",
+                        copyText: "/compact"
+                    )
+                ]
+            ))
+        }
+
+        if pct >= 60 {
+            tips.append(UsageTip(
+                icon: "doc.fill",
+                message: "Avoid re-uploading large files. Reference content already shared earlier in the conversation.",
+                actions: []
+            ))
+        }
+
+        if pct >= 75 {
+            tips.append(UsageTip(
+                icon: "checkmark.circle.fill",
+                message: "Wrap up long threads. Save important outputs before your session resets.",
+                actions: []
+            ))
+        }
+
+        if pct >= 85 {
+            tips.append(UsageTip(
+                icon: "exclamationmark.triangle.fill",
+                message: "Best for short tasks now: quick questions, code review, short edits. Avoid starting new long projects.",
+                actions: []
+            ))
+        }
+
+        if pct >= 95 {
+            tips.append(UsageTip(
+                icon: "xmark.octagon.fill",
+                message: "Almost out. Save your work now. \(sessionResetLabel ?? "Session resets soon").",
+                actions: []
+            ))
+        }
+
+        return tips
     }
 
     // MARK: - Stale
