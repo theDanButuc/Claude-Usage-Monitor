@@ -206,4 +206,4 @@ ClaudeUsageMonitor/
 
 ## License
 
-MIT — use freely, attribution appreciated.
+MIT License. Feel free to use Claude Usage Monitor and contribute.
