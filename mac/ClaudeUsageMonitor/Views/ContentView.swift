@@ -221,7 +221,8 @@ struct ContentView: View {
                             resetLabel: data.sessionResetLabel,
                             used: data.sessionUsed,
                             limit: data.sessionLimit,
-                            progress: data.sessionPercentage
+                            progress: data.sessionPercentage,
+                            budgetProgress: data.sessionBudgetPercentage
                         )
 
                         Divider()
@@ -239,7 +240,8 @@ struct ContentView: View {
                                 resetLabel: data.weeklyResetLabel,
                                 used: data.messagesUsed,
                                 limit: data.messagesLimit,
-                                progress: data.weeklyPercentage
+                                progress: data.weeklyPercentage,
+                                budgetProgress: data.weeklyBudgetPercentage
                             )
                         }
                     }
@@ -266,7 +268,8 @@ struct ContentView: View {
         resetLabel: String?,
         used: Int,
         limit: Int,
-        progress: Double
+        progress: Double,
+        budgetProgress: Double? = nil
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
@@ -294,14 +297,36 @@ struct ContentView: View {
 
             if limit > 0 {
                 GeometryReader { geo in
+                    let w = geo.size.width
+                    let budget = budgetProgress ?? 0
+                    let overBudget = budgetProgress != nil && progress > budget
+
                     ZStack(alignment: .leading) {
+                        // Track background
                         RoundedRectangle(cornerRadius: 4)
                             .fill(Color.primary.opacity(0.10))
                             .frame(height: 8)
 
+                        // Grey budget zone (time elapsed in reset window)
+                        if let bp = budgetProgress, bp > 0 {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color.primary.opacity(0.25))
+                                .frame(width: max(8, w * CGFloat(bp)), height: 8)
+                                .animation(.spring(response: 0.7, dampingFraction: 0.8), value: bp)
+                        }
+
+                        // Red over-budget zone (usage beyond budget pace)
+                        if overBudget {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color.red.opacity(0.85))
+                                .frame(width: max(8, w * CGFloat(progress)), height: 8)
+                                .animation(.spring(response: 0.7, dampingFraction: 0.8), value: progress)
+                        }
+
+                        // Orange usage bar (clipped to budget when over budget)
                         RoundedRectangle(cornerRadius: 4)
-                            .fill(barColor(for: progress))
-                            .frame(width: max(8, geo.size.width * CGFloat(progress)), height: 8)
+                            .fill(overBudget ? Color.orange : barColor(for: progress, hasBudget: budgetProgress != nil))
+                            .frame(width: max(8, w * CGFloat(overBudget ? budget : progress)), height: 8)
                             .animation(.spring(response: 0.7, dampingFraction: 0.8), value: progress)
                     }
                 }
@@ -314,7 +339,15 @@ struct ContentView: View {
         }
     }
 
-    private func barColor(for progress: Double) -> Color {
+    private func barColor(for progress: Double, hasBudget: Bool = false) -> Color {
+        if hasBudget {
+            // When budget data available, only colour changes at extremes
+            switch progress {
+            case 0.9...: return .red
+            case 0.7...: return .orange
+            default:     return .green
+            }
+        }
         switch progress {
         case 0.8...: return .red
         case 0.5...: return .orange

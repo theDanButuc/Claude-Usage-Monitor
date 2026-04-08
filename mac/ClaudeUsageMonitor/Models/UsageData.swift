@@ -38,6 +38,26 @@ struct UsageData {
         return min(1.0, Double(messagesUsed) / Double(messagesLimit))
     }
 
+    /// How far through the 5-hour session window we are (0–1), based on time elapsed.
+    var sessionBudgetPercentage: Double? {
+        guard let reset = resetDate else { return nil }
+        let totalSeconds = 5.0 * 3600.0
+        let remaining = reset.timeIntervalSince(Date())
+        guard remaining >= 0 else { return nil }
+        let elapsed = totalSeconds - remaining
+        return max(0, min(1, elapsed / totalSeconds))
+    }
+
+    /// How far through the 7-day weekly window we are (0–1), based on time elapsed.
+    var weeklyBudgetPercentage: Double? {
+        guard let reset = weeklyResetDate else { return nil }
+        let totalSeconds = 7.0 * 86400.0
+        let remaining = reset.timeIntervalSince(Date())
+        guard remaining >= 0 else { return nil }
+        let elapsed = totalSeconds - remaining
+        return max(0, min(1, elapsed / totalSeconds))
+    }
+
     var messagesRemaining: Int { max(0, primaryLimit - primaryUsed) }
 
     // MARK: - Burn rate
