@@ -14,6 +14,7 @@ from pystray import MenuItem
 from constants import POLL_INTERVAL_MS
 from data_reader import RateLimitData, read_rate_limits
 from icon_generator import create_icon
+from notification_service import NotificationService
 from popup_window import UsagePopup
 
 SCRAPE_OPTIONS = [
@@ -35,6 +36,7 @@ class ClaudeUsageTray:
         self._icon: pystray.Icon | None = None
         self._scrape_index = DEFAULT_SCRAPE_INDEX
         self._scrape_interval = SCRAPE_OPTIONS[DEFAULT_SCRAPE_INDEX][1]
+        self._notifications = NotificationService()
 
         # Set up customtkinter
         ctk.set_appearance_mode("dark")
@@ -120,6 +122,7 @@ class ClaudeUsageTray:
         if self._data_changed(new_data):
             self._data = new_data
             self._update_icon()
+            self._notifications.check_and_notify(self._data)
             if self._popup is not None and self._popup.winfo_exists():
                 self._popup.update_data(self._data)
 
@@ -200,6 +203,7 @@ class ClaudeUsageTray:
         """Force a data refresh and update everything."""
         self._data = read_rate_limits()
         self._update_icon()
+        self._notifications.check_and_notify(self._data)
         if self._popup is not None and self._popup.winfo_exists():
             self._popup.update_data(self._data)
 

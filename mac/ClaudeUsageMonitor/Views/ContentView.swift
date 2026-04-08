@@ -4,6 +4,7 @@ struct ContentView: View {
     @EnvironmentObject var service: WebScrapingService
 
     @AppStorage("availableUpdate") private var availableUpdate: String = ""
+    @AppStorage("tipsExpanded") private var tipsExpanded: Bool = true
 
     private var refreshIntervalLabel: String {
         let interval = UserDefaults.standard.double(forKey: "refreshInterval")
@@ -193,8 +194,26 @@ struct ContentView: View {
         Group {
             if let tips = service.usageData?.currentTips, !tips.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    ForEach(Array(tips.enumerated()), id: \.offset) { _, tip in
-                        TipRowView(tip: tip)
+                    HStack {
+                        Text("Tips")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button {
+                            tipsExpanded.toggle()
+                        } label: {
+                            Image(systemName: tipsExpanded ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.horizontal, 4)
+
+                    if tipsExpanded {
+                        ForEach(Array(tips.enumerated()), id: \.offset) { _, tip in
+                            TipRowView(tip: tip)
+                        }
                     }
                 }
                 .padding(.horizontal, 4)

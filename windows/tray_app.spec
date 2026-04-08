@@ -9,6 +9,7 @@ hiddenimports = [
     'PIL._tkinter_finder',
     'curl_cffi',
     'curl_cffi.requests',
+    'winotify',
 ]
 hiddenimports += collect_submodules('curl_cffi')
 

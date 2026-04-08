@@ -21,6 +21,7 @@ from constants import (
     usage_color,
 )
 from data_reader import RateLimitData
+from tips import get_tips
 
 
 def _apply_rounded_corners(hwnd):
@@ -71,6 +72,10 @@ class UsagePopup(ctk.CTkToplevel):
         self._sn_widgets = None
         self._updated_label = None
         self._refresh_btn = None
+        self._tips_frame = None
+        self._tips_main = None  # reference to main container for geometry updates
+        self._tips_visible = True
+        self._tips_pct: float | None = None
 
         self._build_ui(data)
 
@@ -109,6 +114,7 @@ class UsagePopup(ctk.CTkToplevel):
     def _build_ui(self, data: RateLimitData):
         main = ctk.CTkFrame(self, fg_color=BG_COLOR, corner_radius=0)
         main.pack(fill="both", expand=True)
+        self._tips_main = main
 
         # Title bar
         title_frame = ctk.CTkFrame(main, fg_color=BG_COLOR, height=40, corner_radius=0)
@@ -141,6 +147,12 @@ class UsagePopup(ctk.CTkToplevel):
         # Sonnet section (same 7-day window) — only shown when data exists
         if data.sonnet is not None and data.sonnet.resets_at is not None:
             self._sn_widgets = self._build_limit_section(main, "Sonnet Only (7-day)", data.sonnet, 7 * 86400)
+
+        # Tips section
+        pct = data.five_hour.used_percentage if data.five_hour else None
+        self._tips_frame = ctk.CTkFrame(main, fg_color=BG_COLOR, corner_radius=0)
+        self._tips_frame.pack(fill="x")
+        self._build_tips(self._tips_frame, pct)
 
         # Footer
         footer = ctk.CTkFrame(main, fg_color=BG_COLOR)
@@ -229,6 +241,102 @@ class UsagePopup(ctk.CTkToplevel):
         reset_label.pack(anchor="w")
 
         return pct_label, canvas, None, None, reset_label
+
+    def _build_tips(self, container, pct):
+        """Populate the tips container. Destroys existing children first."""
+        for child in container.winfo_children():
+            child.destroy()
+
+        tips = get_tips(pct)
+        if not tips:
+            self._tips_pct = pct
+            return
+
+        self._tips_pct = pct
+
+        # Section divider
+        ctk.CTkFrame(container, fg_color=BORDER_COLOR, height=1).pack(fill="x", padx=16, pady=(12, 0))
+
+        # Header row with toggle
+        header = ctk.CTkFrame(container, fg_color=BG_COLOR)
+        header.pack(fill="x", padx=16, pady=(8, 0))
+
+        ctk.CTkLabel(
+            header, text="Tips",
+            font=("Segoe UI", 12, "bold"), text_color=TEXT_SECONDARY,
+        ).pack(side="left")
+
+        toggle_text = "▲" if self._tips_visible else "▼"
+        toggle_btn = ctk.CTkButton(
+            header, text=toggle_text, width=24, height=20, corner_radius=4,
+            fg_color="transparent", hover_color="#333333",
+            text_color=TEXT_SECONDARY, font=("Segoe UI", 10),
+            command=self._toggle_tips,
+        )
+        toggle_btn.pack(side="right")
+
+        if not self._tips_visible:
+            return
+
+        for tip in tips:
+            card = ctk.CTkFrame(container, fg_color=CARD_BG, corner_radius=8,
+                                border_width=1, border_color="#4a3020")
+            card.pack(fill="x", padx=16, pady=(6, 0))
+
+            inner = ctk.CTkFrame(card, fg_color=CARD_BG)
+            inner.pack(fill="x", padx=12, pady=10)
+
+            # Icon + message row
+            row = ctk.CTkFrame(inner, fg_color=CARD_BG)
+            row.pack(fill="x")
+
+            ctk.CTkLabel(
+                row, text=tip.icon, width=20,
+                font=("Segoe UI", 13), text_color=CLAUDE_ORANGE,
+                anchor="center",
+            ).pack(side="left", anchor="n", padx=(0, 6))
+
+            ctk.CTkLabel(
+                row, text=tip.message,
+                font=("Segoe UI", 11), text_color=TEXT_PRIMARY,
+                wraplength=WINDOW_WIDTH - 80, justify="left", anchor="w",
+            ).pack(side="left", fill="x", expand=True)
+
+            # Action copy buttons
+            if tip.actions:
+                btn_row = ctk.CTkFrame(inner, fg_color=CARD_BG)
+                btn_row.pack(anchor="w", pady=(6, 0), padx=(26, 0))
+                for action in tip.actions:
+                    self._make_copy_button(btn_row, action.label, action.copy_text)
+
+    def _make_copy_button(self, parent, label: str, copy_text: str):
+        """Create a copy-to-clipboard button that briefly shows 'Copied!'."""
+        btn = ctk.CTkButton(
+            parent, text=f"Copy: {label}", height=24, corner_radius=4,
+            fg_color="#3a2a1a", hover_color="#4a3828",
+            text_color=CLAUDE_ORANGE, font=("Segoe UI", 11),
+            border_width=1, border_color="#5a3a20",
+        )
+        btn.pack(side="left", padx=(0, 6))
+
+        def _copy():
+            self.clipboard_clear()
+            self.clipboard_append(copy_text)
+            btn.configure(text="Copied!")
+            self.after(2000, lambda: btn.configure(text=f"Copy: {label}"))
+
+        btn.configure(command=_copy)
+
+    def _toggle_tips(self):
+        """Toggle tips visibility and resize the window."""
+        self._tips_visible = not self._tips_visible
+        if self._tips_frame:
+            self._build_tips(self._tips_frame, self._tips_pct)
+            self.update_idletasks()
+            new_h = self.winfo_reqheight()
+            x = self._screen_w - WINDOW_WIDTH - TASKBAR_OFFSET
+            y = self._screen_h - new_h - 50
+            self.geometry(f"{WINDOW_WIDTH}x{new_h}+{x}+{y}")
 
     @staticmethod
     def _hex(color):
@@ -361,3 +469,13 @@ class UsagePopup(ctk.CTkToplevel):
             self._updated_label.configure(text=self._format_updated(data))
         if self._refresh_btn:
             self._refresh_btn.configure(text="Refresh", state="normal")
+
+        # Rebuild tips and resize window if tips changed
+        if self._tips_frame:
+            pct = data.five_hour.used_percentage if data.five_hour else None
+            self._build_tips(self._tips_frame, pct)
+            self.update_idletasks()
+            new_h = self.winfo_reqheight()
+            x = self._screen_w - WINDOW_WIDTH - TASKBAR_OFFSET
+            y = self._screen_h - new_h - 50
+            self.geometry(f"{WINDOW_WIDTH}x{new_h}+{x}+{y}")
