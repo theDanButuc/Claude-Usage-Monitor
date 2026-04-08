@@ -294,6 +294,11 @@ class WebScrapingService:
         try:
             self.is_loading = True
             self._page.goto(USAGE_URL, wait_until="domcontentloaded", timeout=30_000)
+            # After server-side redirects settle, check we actually landed on the
+            # usage page.  If not, the user isn't authenticated.
+            url = self._page.url
+            if url and "settings/usage" not in url:
+                self._trigger_needs_login()
         except Exception as exc:
             logger.warning("Navigation error: %s", exc)
             self.is_loading = False
@@ -408,11 +413,7 @@ class WebScrapingService:
         if self._page is None:
             return
         url = self._page.url
-        if "/login" in url or "/auth" in url or "?next=" in url:
-            self.is_loading = False
-            self.needs_login = True
-            if self.on_needs_login:
-                self.on_needs_login()
+        if not url or url == "about:blank":
             return
 
         if "settings/usage" in url:
@@ -420,6 +421,21 @@ class WebScrapingService:
             # No Playwright calls allowed here — this callback may fire from the
             # Playwright event loop and re-entering its sync wrapper would deadlock.
             self._pending_dom_extraction = True
+            return
+
+        # Any URL other than the usage page means we were redirected away —
+        # covers /login, /auth, ?next=, the home page, and any future auth URLs.
+        self._trigger_needs_login()
+
+    def _trigger_needs_login(self) -> None:
+        """Signal that login is required. Idempotent — fires the callback once."""
+        with self._lock:
+            if self.needs_login:
+                return
+            self.is_loading = False
+            self.needs_login = True
+        if self.on_needs_login:
+            self.on_needs_login()
 
     def _do_dom_extraction(self) -> None:
         """Run selector wait + JS evaluation on the browser thread."""
