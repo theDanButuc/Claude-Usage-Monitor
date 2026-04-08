@@ -1,4 +1,4 @@
-# ClaudeUsageMonitor · v1.5.0
+# ClaudeUsageMonitor · v2.0.0
 
 Track your [Claude.ai](https://claude.ai) usage in real time — available as a native **macOS menu-bar app** and a **Windows system-tray app**. No API key needed.
 
