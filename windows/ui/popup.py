@@ -95,22 +95,26 @@ class PopupWindow:
 
         self._win = tk.Toplevel(root)
         self._win.title("Claude Usage Monitor")
-        self._win.configure(bg=_BG)
+        self._win.configure(bg=_SEP)   # 1 px border colour
         self._win.resizable(False, False)
-        self._win.overrideredirect(False)
-        self._win.protocol("WM_DELETE_WINDOW", self.hide)
+        self._win.overrideredirect(True)   # borderless popover — no OS title bar
         self._win.withdraw()  # start hidden
 
         # Keep on top so it behaves like a popover
         self._win.attributes("-topmost", True)
+
+        # Drag state (header drag lets the user reposition the popup)
+        self._drag_x = 0
+        self._drag_y = 0
 
         self._build_ui()
 
     # ── Build ──────────────────────────────────────────────────────────────────
 
     def _build_ui(self) -> None:
+        # 1 px border is provided by the window's bg=_SEP + 1 px padding here
         self._frame = tk.Frame(self._win, bg=_BG, padx=0, pady=0)
-        self._frame.pack(fill="both", expand=True)
+        self._frame.pack(fill="both", expand=True, padx=1, pady=1)
 
         self._build_header()
         self._sep(self._frame)
@@ -121,6 +125,10 @@ class PopupWindow:
     def _build_header(self) -> None:
         hdr = tk.Frame(self._frame, bg="#252525", padx=16, pady=10)
         hdr.pack(fill="x")
+
+        # Make header draggable so the user can reposition the popup
+        hdr.bind("<ButtonPress-1>", self._start_drag)
+        hdr.bind("<B1-Motion>", self._do_drag)
 
         tk.Label(
             hdr,
@@ -133,6 +141,16 @@ class PopupWindow:
         self._plan_badge = tk.Label(hdr, text="", bg="#252525", fg=_TEXT_SECONDARY,
                                     font=("Segoe UI", 9))
         self._plan_badge.pack(side="left", padx=(6, 0))
+
+        # ✕ button hides the popup (does not quit the app)
+        close_btn = tk.Label(
+            hdr, text="✕", bg="#252525", fg=_TEXT_SECONDARY,
+            font=("Segoe UI", 10), cursor="hand2",
+        )
+        close_btn.pack(side="right")
+        close_btn.bind("<Button-1>", lambda _: self.hide())
+        close_btn.bind("<Enter>", lambda _: close_btn.config(fg=_TEXT_PRIMARY))
+        close_btn.bind("<Leave>", lambda _: close_btn.config(fg=_TEXT_SECONDARY))
 
         # Update banner (hidden by default)
         self._update_frame = tk.Frame(self._frame, bg="#0d2137", padx=12, pady=6)
@@ -261,18 +279,36 @@ class PopupWindow:
     # ── Public API ─────────────────────────────────────────────────────────────
 
     def show(self, x: int | None = None, y: int | None = None) -> None:
+        # Show first so geometry is measurable
+        self._win.deiconify()
+        self._win.update_idletasks()
+
         if x is not None and y is not None:
-            # Position near the tray icon
+            # Caller supplied explicit coordinates (e.g. from a cursor position)
             screen_h = self._win.winfo_screenheight()
-            win_h = 420  # approximate
+            win_h = self._win.winfo_height() or 460
             actual_y = y - win_h if y > screen_h // 2 else y
             self._win.geometry(f"+{x}+{actual_y}")
-        self._win.deiconify()
+        else:
+            # Auto-position in the bottom-right corner above the taskbar
+            w = self._win.winfo_width() or self.WIDTH
+            h = self._win.winfo_height() or 460
+            screen_w = self._win.winfo_screenwidth()
+            screen_h = self._win.winfo_screenheight()
+            margin = 12
+            taskbar_h = 48  # typical Windows taskbar height
+            pos_x = screen_w - w - margin
+            pos_y = screen_h - h - taskbar_h - margin
+            self._win.geometry(f"+{pos_x}+{pos_y}")
+
         self._win.lift()
         self._win.focus_force()
         self._visible = True
+        # Arm focus-out dismiss after a short delay to avoid a false trigger on open
+        self._win.after(250, lambda: self._win.bind("<FocusOut>", self._on_focus_out))
 
     def hide(self) -> None:
+        self._win.unbind("<FocusOut>")
         self._win.withdraw()
         self._visible = False
 
@@ -285,6 +321,33 @@ class PopupWindow:
     @property
     def is_visible(self) -> bool:
         return self._visible
+
+    # ── Drag support ───────────────────────────────────────────────────────────
+
+    def _start_drag(self, event: tk.Event) -> None:
+        self._drag_x = event.x_root - self._win.winfo_x()
+        self._drag_y = event.y_root - self._win.winfo_y()
+
+    def _do_drag(self, event: tk.Event) -> None:
+        x = event.x_root - self._drag_x
+        y = event.y_root - self._drag_y
+        self._win.geometry(f"+{x}+{y}")
+
+    # ── Focus-out dismiss ──────────────────────────────────────────────────────
+
+    def _on_focus_out(self, event: tk.Event) -> None:
+        # Small delay lets tkinter settle the new focus target before we check
+        self._win.after(150, self._check_and_hide)
+
+    def _check_and_hide(self) -> None:
+        if not self._visible:
+            return
+        try:
+            focused = self._win.focus_get()
+        except Exception:
+            focused = None
+        if focused is None:
+            self.hide()
 
     def notify_update(self, version: str) -> None:
         self._available_update = version

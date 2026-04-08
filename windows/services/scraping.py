@@ -309,39 +309,63 @@ class WebScrapingService:
         threading.Thread(target=self._navigate_to_usage, daemon=True).start()
 
     def open_login_window(self) -> None:
-        """Show the browser window so the user can log in."""
-        if self._context is None:
-            return
+        """Show a headed browser window for login.
 
+        Properly shuts down the headless context first (Chrome locks the
+        user_data_dir, so two contexts cannot share it simultaneously), then
+        restarts the headless context after login succeeds.
+        """
         def _do_login():
-            # Launch a headed browser for login, reusing the same user data dir
-            pw2 = sync_playwright().start()
-            ctx2 = pw2.chromium.launch_persistent_context(
-                user_data_dir=str(BROWSER_DATA_DIR),
-                headless=False,
-                args=["--disable-blink-features=AutomationControlled"],
-                user_agent=USER_AGENT,
-            )
-            p2 = ctx2.new_page() if not ctx2.pages else ctx2.pages[0]
-            p2.goto(LOGIN_URL, wait_until="domcontentloaded", timeout=30_000)
+            # 1. Close the running headless browser so the user_data_dir is free.
+            with self._lock:
+                ctx = self._context
+                pw = self._playwright
+                self._context = None
+                self._page = None
+                self._playwright = None
 
-            # Wait until the user is no longer on a login/auth page
+            if ctx is not None:
+                try:
+                    ctx.close()
+                except Exception:
+                    pass
+            if pw is not None:
+                try:
+                    pw.stop()
+                except Exception:
+                    pass
+
+            # 2. Open a headed browser pointing at the same user_data_dir.
+            BROWSER_DATA_DIR.mkdir(parents=True, exist_ok=True)
+            pw2 = sync_playwright().start()
             try:
-                p2.wait_for_url(
-                    re.compile(r"https://claude\.ai/(?!login|auth)"),
-                    timeout=300_000,
+                ctx2 = pw2.chromium.launch_persistent_context(
+                    user_data_dir=str(BROWSER_DATA_DIR),
+                    headless=False,
+                    args=["--disable-blink-features=AutomationControlled"],
+                    user_agent=USER_AGENT,
                 )
-            except Exception:
-                pass
+                p2 = ctx2.new_page() if not ctx2.pages else ctx2.pages[0]
+                p2.goto(LOGIN_URL, wait_until="domcontentloaded", timeout=30_000)
+                try:
+                    p2.wait_for_url(
+                        re.compile(r"https://claude\.ai/(?!login|auth)"),
+                        timeout=300_000,
+                    )
+                except Exception:
+                    pass
+                finally:
+                    ctx2.close()
             finally:
-                ctx2.close()
                 pw2.stop()
 
-            # Notify success and trigger a fresh load
+            # 3. Notify success and restart the headless browser.
             self.needs_login = False
             if self.on_login_success:
                 self.on_login_success()
-            threading.Thread(target=self._navigate_to_usage, daemon=True).start()
+
+            self._started = False
+            self.start()
 
         threading.Thread(target=_do_login, daemon=True).start()
 
@@ -370,11 +394,21 @@ class WebScrapingService:
             return
 
         if "settings/usage" in url:
-            # Run DOM extraction after a short delay to let React render
+            # Run DOM extraction once the page has rendered
             def _delayed_dom():
-                import time
-                time.sleep(5.0)
                 try:
+                    # Wait for at least one progress bar to appear instead of
+                    # sleeping a fixed amount of time.
+                    if self._page is not None:
+                        try:
+                            self._page.wait_for_selector(
+                                '[role="progressbar"]',
+                                timeout=10_000,
+                            )
+                        except Exception:
+                            pass  # proceed with extraction even if selector absent
+                    if self._page is None:
+                        return
                     result = self._page.evaluate(_DOM_JS)
                     j = json.loads(result)
                     self.is_loading = False

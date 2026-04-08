@@ -35,7 +35,7 @@ pip install -r requirements.txt
 ### Step 2 — Install the Playwright browser
 
 ```powershell
-playwright install chromium
+python -m playwright install chromium
 ```
 
 ### Step 3 — Run the app
@@ -124,7 +124,7 @@ Settings are stored in `%APPDATA%\ClaudeUsageMonitor\settings.json`:
 | Login window keeps appearing | Your Claude session expired — log in again when the browser window opens |
 | Shows `0/0` or no numbers | Claude.ai's page may have changed; open a GitHub Issue |
 | Tray icon not appearing | Ensure `pystray` and `Pillow` are installed (`pip install pystray Pillow`) |
-| Browser window doesn't open for login | Run `playwright install chromium` to install the browser |
+| Browser window doesn't open for login | Run `python -m playwright install chromium` to install the browser |
 | `winotify` errors | Notifications require Windows 10+; on older Windows, notifications will be logged to console only |
 
 ---
