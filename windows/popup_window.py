@@ -1,9 +1,30 @@
 """Dark-themed popup window showing Claude Code usage limits."""
 
 import ctypes
+import json
+import os
 import tkinter as tk
 from datetime import datetime, timezone
 import customtkinter as ctk
+
+_PREFS_PATH = os.path.join(
+    os.environ.get("APPDATA", os.path.expanduser("~")),
+    "ClaudeUsageMonitor", "prefs.json",
+)
+
+
+def _load_prefs() -> dict:
+    try:
+        with open(_PREFS_PATH, "r") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _save_prefs(prefs: dict) -> None:
+    os.makedirs(os.path.dirname(_PREFS_PATH), exist_ok=True)
+    with open(_PREFS_PATH, "w") as f:
+        json.dump(prefs, f)
 
 from constants import (
     ACCENT,
@@ -74,7 +95,7 @@ class UsagePopup(ctk.CTkToplevel):
         self._refresh_btn = None
         self._tips_frame = None
         self._tips_main = None  # reference to main container for geometry updates
-        self._tips_visible = True
+        self._tips_visible = _load_prefs().get("tips_visible", True)
         self._tips_pct: float | None = None
 
         self._build_ui(data)
@@ -330,6 +351,9 @@ class UsagePopup(ctk.CTkToplevel):
     def _toggle_tips(self):
         """Toggle tips visibility and resize the window."""
         self._tips_visible = not self._tips_visible
+        prefs = _load_prefs()
+        prefs["tips_visible"] = self._tips_visible
+        _save_prefs(prefs)
         if self._tips_frame:
             self._build_tips(self._tips_frame, self._tips_pct)
             self.update_idletasks()
