@@ -1,8 +1,8 @@
-# ClaudeUsageMonitor · v1.5.0
+# ClaudeUsageMonitor · v2.0.0
 
-A native macOS menu-bar app that tracks your [Claude.ai](https://claude.ai) usage in real time — no API key needed.
+Track your [Claude.ai](https://claude.ai) usage in real time — available as a native **macOS menu-bar app** and a **Windows system-tray app**. No API key needed.
 
-<img src="ClaudeUsageMonitor/Assets/AppIcon_128.png" width="128" alt="App Icon" />
+<img src="mac/ClaudeUsageMonitor/Assets/AppIcon_128.png" width="128" alt="App Icon" />
 
 ---
 
@@ -16,40 +16,48 @@ A native macOS menu-bar app that tracks your [Claude.ai](https://claude.ai) usag
 
 ## Features
 
-- **Menu-bar only** — no Dock icon, stays out of your way
-- **Burn rate display** — menu bar shows estimated time left (`~45min left | 42%`) based on actual usage pace; falls back to percentage when idle
-- **Colour-coded icon** — green → orange → red as usage climbs
-- **Two-bar dashboard** — separate horizontal bars for Current session and Weekly limits, each with reset timing
-- **Session-aware** — captures Claude's internal rate-limit window via a fetch interceptor, not just the billing-period total
-- **Reset countdowns** — "Resets in X hr Y min" for the session window; "Resets [Day] [Time]" for weekly limits — sourced directly from claude.ai
-- **Configurable auto-refresh** — 30s / 1m / 2m / 5m / 10m, set via right-click menu
-- **Native notifications** — contextual alerts at 75%, 80%, 90%, 95%, 100% usage and on session reset
-- **Smart tip banner** — dismissable in-popover tip that updates as usage climbs (75→80→90→95%)
-- **Stale data indicator** — icon turns grey and shows ⚠ if data is older than 10 minutes
-- **Right-click context menu** — quick usage info and settings without opening the popover
-- **In-app update banner** — notified when a new version is available on GitHub
-- **Persisted login** — WebKit stores your Claude session automatically; you only log in once
+| Feature | macOS | Windows |
+|---------|:-----:|:-------:|
+| Native tray / menu-bar icon | ✓ | ✓ |
+| Colour-coded icon (green → orange → red) | ✓ | ✓ |
+| 5-hour session usage bar | ✓ | ✓ |
+| 7-day weekly usage bar | ✓ | ✓ |
+| Sonnet-specific usage bar | | ✓ |
+| Reset countdowns | ✓ | ✓ |
+| Configurable auto-refresh | ✓ | ✓ |
+| Stale data indicator | ✓ | ✓ |
+| Burn-rate display (estimated time left) | ✓ | |
+| Native OS notifications | ✓ | |
+| Smart tip banner | ✓ | |
+| In-app update banner | ✓ | |
+| Right-click context menu | ✓ | ✓ |
+| Dark-themed popup window | | ✓ |
 
 ---
 
-## Installation (recommended — pre-built DMG)
+## macOS
 
-> **Requires macOS 13 Ventura or later.**
+### Requirements
 
-### Step 1 — Download
+- macOS 13 Ventura or later
+- An active Claude.ai account (Free, Pro, Team, or Max)
+
+### Installation (pre-built DMG)
+
+**Step 1 — Download**
 
 Download the latest **ClaudeUsageMonitor.dmg** from the [Releases page](https://github.com/theDanButuc/Claude-Usage-Monitor/releases/latest).
 
-### Step 2 — Install
+**Step 2 — Install**
 
 1. Double-click `ClaudeUsageMonitor.dmg` to mount it
 2. Drag **ClaudeUsageMonitor** into the **Applications** folder shortcut
 
-### Step 3 — First launch (Gatekeeper bypass)
+**Step 3 — First launch (Gatekeeper bypass)**
 
 Because the app is **ad-hoc signed** (not yet notarized with an Apple Developer ID), macOS will block it on first open.
 
-**Do this once:**
+Do this once:
 
 ```
 Right-click ClaudeUsageMonitor.app → Open → Open
@@ -62,11 +70,9 @@ xattr -cr /Applications/ClaudeUsageMonitor.app
 open /Applications/ClaudeUsageMonitor.app
 ```
 
-> You will **not** need to do this again after the first successful launch.
+**Step 4 — Log in to Claude**
 
-### Step 4 — Log in to Claude
-
-A browser window opens automatically on first run. Log in to your Claude.ai account normally. The window closes by itself when login succeeds and the app icon appears in your menu bar.
+A browser window opens automatically on first run. Log in to your Claude.ai account. The window closes by itself when login succeeds and the app icon appears in your menu bar.
 
 ### Homebrew (alternative)
 
@@ -75,9 +81,7 @@ brew tap theDanButuc/tap
 brew install --cask claude-usage-monitor
 ```
 
----
-
-## Usage
+### Usage (macOS)
 
 | Element | Meaning |
 |---------|---------|
@@ -86,70 +90,34 @@ brew install --cask claude-usage-monitor
 | **Red** `~8min left \| 91%` | Almost out — act fast |
 | **Grey** `⚠ ~45min left \| 24%` | Data is stale (last update > 10 min ago) |
 
-The left value shows **estimated time left** (burn rate) when active, or **Current session %** when idle. The right value is always **Weekly limits %**.
-
 **Left-click** the icon to open the popover:
 
-- **Plan usage limits** section with two progress bars:
-  - **Current session** — rate-limit window usage with "Resets in X hr Y min" countdown
-  - **Weekly limits / All models** — billing-period usage with reset day and time (e.g. "Resets Fri 10:00 AM"), read directly from claude.ai
-- **Refresh button** (↻) — force an immediate scrape
-- **Quit button** — exit the app
+- **Current session** bar — rate-limit window usage with "Resets in X hr Y min" countdown
+- **Weekly limits** bar — billing-period usage with reset day and time
+- **Refresh** (↻) — force an immediate scrape
+- **Quit** — exit the app
 
-**Right-click** the icon for a quick context menu:
+**Right-click** for a quick context menu with usage info, refresh interval (30s / 1m / 2m / 5m / 10m), and Quit.
 
-- Current usage and reset countdown at a glance
-- **Refresh Interval** submenu — choose 30s / 1m / 2m / 5m / 10m (persisted across launches)
-- **Refresh Now** — immediate refresh
-- **Quit**
+### Building from source (macOS)
 
----
-
-## Building from source
-
-You need **Xcode Command Line Tools** (free) — full Xcode is not required.
+You need **Xcode Command Line Tools** — full Xcode is not required.
 
 ```bash
 xcode-select --install   # if not already installed
 ```
 
-Clone and build:
-
 ```bash
 git clone https://github.com/theDanButuc/Claude-Usage-Monitor.git
 cd Claude-Usage-Monitor
 
-bash scripts/build.sh             # native arch (arm64 or x86_64)
-bash scripts/build.sh --universal # universal binary (arm64 + x86_64)
+bash mac/scripts/build.sh             # native arch (arm64 or x86_64)
+bash mac/scripts/build.sh --universal # universal binary (arm64 + x86_64)
 ```
 
 Produces `dist/ClaudeUsageMonitor-vX.X.X.dmg` ready to install.
 
-### Regenerate the app icon
-
-```bash
-swift scripts/make_icon.swift
-# Produces /tmp/AppIcon.icns — copy to ClaudeUsageMonitor/Assets/AppIcon.icns
-```
-
-
----
-
-## How it works
-
-### Data source
-
-The app embeds a hidden `WKWebView` that loads `claude.ai/settings/usage` using your stored browser session (via `WKWebsiteDataStore.default()` — the same cookie store Safari uses for WebKit-based apps).
-
-A JavaScript **fetch/XHR interceptor** is injected at document start, before any page script runs. It captures every API response that mentions usage, limits, or quotas and forwards the raw JSON to Swift. This gives session-window data (e.g. the 5-hour rate-limit window) not visible in the page's DOM text. A DOM-text extraction pass runs 5 s after page load as a fallback.
-
-### Cookie persistence
-
-`WKWebsiteDataStore.default()` persists cookies to disk between app launches automatically — no manual Keychain work needed. If the session expires, the login window reappears.
-
----
-
-## Troubleshooting
+### Troubleshooting (macOS)
 
 | Symptom | Fix |
 |---------|-----|
@@ -161,46 +129,108 @@ A JavaScript **fetch/XHR interceptor** is injected at document start, before any
 
 ---
 
-## Project structure
+## Windows
 
+### Requirements
+
+- Windows 10 or later
+- An active Claude.ai account (Free, Pro, Team, or Max)
+- Python 3.11+ (only if running from source)
+
+### Installation (pre-built EXE)
+
+Download the latest **ClaudeUsageMonitor-windows.zip** from the [Releases page](https://github.com/theDanButuc/Claude-Usage-Monitor/releases/latest), extract it, and run `ClaudeUsageMonitor.exe`.
+
+On first launch a browser window opens so you can log in to Claude.ai. Your session key is stored in `%APPDATA%\ClaudeUsageMonitor\session.json` and reused on subsequent launches.
+
+### Usage (Windows)
+
+The app lives in the system tray (bottom-right of the taskbar).
+
+- **Left-click** (or **Show Usage** from the right-click menu) — opens a dark popup with three usage bars: **5-hour session**, **7-day weekly**, and **Sonnet**. Each bar shows the current percentage and a "Resets in X hr Y min" countdown.
+- **Right-click** the tray icon for:
+  - **Show Usage** — toggle the popup
+  - **Refresh Now** — immediate data refresh
+  - **Poll Frequency** — submenu to choose 30s / 1m / 2m / 5m / 10m
+  - **Quit**
+
+The icon colour reflects 5-hour session usage: green (< 60 %), yellow (60–80 %), red (> 80 %). A grey icon means data is stale (> 10 minutes old).
+
+### Building from source (Windows)
+
+```bash
+cd windows
+pip install -r requirements.txt
+python tray_app.py
 ```
-ClaudeUsageMonitor/
-├── ClaudeUsageMonitor/
-│   ├── ClaudeUsageMonitorApp.swift   # @main entry point
-│   ├── AppDelegate.swift             # Status bar, popover, refresh timer
-│   ├── LoginWindowController.swift   # Full-screen login WebView
-│   ├── Models/
-│   │   └── UsageData.swift           # Data model + computed helpers
-│   ├── Services/
-│   │   ├── WebScrapingService.swift  # WKWebView + JS interceptor
-│   │   ├── NotificationService.swift # Usage threshold & reset notifications
-│   │   └── UpdateService.swift       # GitHub Releases update check
-│   ├── Views/
-│   │   ├── ContentView.swift         # Popover UI (two-bar dashboard)
-│   │   └── CircularProgressView.swift
-│   ├── Assets/
-│   │   └── AppIcon.icns              # All 10 icon sizes
-│   ├── Info.plist
-│   └── ClaudeUsageMonitor.entitlements
-├── scripts/
-│   ├── build.sh                       # Local build + DMG script
-│   └── make_icon.swift               # Icon generator (Swift script)
-├── screenshots/
-│   └── popover.png                   # App screenshot
-├── .github/workflows/
-│   ├── release.yml                   # CI: build & publish DMG on git tag
-│   └── update-homebrew-tap.yml       # CI: update Homebrew cask after release
-├── project.yml                        # XcodeGen spec
-└── .gitignore
+
+To produce a standalone EXE with PyInstaller:
+
+```bash
+cd windows
+pyinstaller tray_app.spec
+# Output: windows/dist/ClaudeUsageMonitor/ClaudeUsageMonitor.exe
 ```
+
+### Troubleshooting (Windows)
+
+| Symptom | Fix |
+|---------|-----|
+| Tray icon doesn't appear | Check the hidden icons area in the taskbar (^ arrow) |
+| "No data yet" tooltip | First scrape is still running — wait a few seconds or click Refresh Now |
+| Login window keeps appearing | Session key expired — delete `%APPDATA%\ClaudeUsageMonitor\session.json` and restart |
+| Shows 0 % for all bars | Claude.ai API response changed; open a GitHub Issue |
 
 ---
 
-## Requirements
+## How it works
 
-- macOS 13 Ventura or later
-- An active Claude.ai account (Free, Pro, Team, or Max)
-- Internet connection
+### Data source
+
+Both versions call the `claude.ai/api/organizations/{org_id}/usage` endpoint with your stored session cookie — the same data visible on `claude.ai/settings/usage`.
+
+**macOS** uses an embedded `WKWebView` with a JavaScript fetch/XHR interceptor injected at document start. This captures session-window data (e.g. the 5-hour rate-limit window) not visible in the page's DOM text, and stores your session automatically via `WKWebsiteDataStore.default()`.
+
+**Windows** uses `curl_cffi` to make direct API requests, impersonating Chrome to avoid bot detection. The session key is extracted once via a Playwright browser login and cached in `%APPDATA%\ClaudeUsageMonitor\session.json`.
+
+---
+
+## Project structure
+
+```
+Claude-Usage-Monitor/
+├── mac/                                  # macOS Swift app
+│   ├── ClaudeUsageMonitor/
+│   │   ├── ClaudeUsageMonitorApp.swift   # @main entry point
+│   │   ├── AppDelegate.swift             # Status bar, popover, refresh timer
+│   │   ├── LoginWindowController.swift   # Full-screen login WebView
+│   │   ├── Models/UsageData.swift        # Data model + computed helpers
+│   │   ├── Services/
+│   │   │   ├── WebScrapingService.swift  # WKWebView + JS interceptor
+│   │   │   ├── NotificationService.swift # Threshold & reset notifications
+│   │   │   └── UpdateService.swift       # GitHub Releases update check
+│   │   ├── Views/
+│   │   │   ├── ContentView.swift         # Popover UI (two-bar dashboard)
+│   │   │   └── CircularProgressView.swift
+│   │   └── Assets/AppIcon.icns
+│   ├── scripts/
+│   │   ├── build.sh                      # Local build + DMG script
+│   │   └── make_icon.swift               # Icon generator
+│   └── project.yml                       # XcodeGen spec
+├── windows/                              # Windows Python app
+│   ├── tray_app.py                       # Entry point + tray orchestration
+│   ├── popup_window.py                   # Dark-themed CTk popup
+│   ├── scraper.py                        # curl_cffi API client
+│   ├── data_reader.py                    # Rate-limits file reader
+│   ├── icon_generator.py                 # Dynamic PIL tray icon
+│   ├── constants.py                      # Colours, paths, timing
+│   └── tray_app.spec                     # PyInstaller spec
+├── screenshots/
+├── .github/workflows/
+│   ├── release.yml                       # CI: build & publish on git tag
+│   └── update-homebrew-tap.yml           # CI: update Homebrew cask
+└── README.md
+```
 
 ---
 

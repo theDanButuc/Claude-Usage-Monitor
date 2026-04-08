@@ -26,6 +26,14 @@ Icon?
 .build/
 .swiftpm/
 
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+
 # Temp files
 *.tmp
 *.log
@@ -33,3 +41,6 @@ tmp_screenshots/
 IMPROVEMENTS.md
 SMART_TIPS_UI.md
 CLAUDE.md
+browser_data/
+windows/.claude/
+windows/.claude/settings.local.json
