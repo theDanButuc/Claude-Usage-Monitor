@@ -1,0 +1,5 @@
+playwright>=1.44.0
+pystray>=0.19.5
+Pillow>=10.2.0
+requests>=2.31.0
+winotify>=1.1.0
