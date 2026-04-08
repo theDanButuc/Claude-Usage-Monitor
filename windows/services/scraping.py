@@ -233,12 +233,19 @@ class WebScrapingService:
         self._page: Page | None = None
         self._started = False
 
+        # Signals for the browser thread (all Playwright calls must stay on that thread)
+        self._pending_refresh = threading.Event()
+        self._pending_dom_extraction = False
+        self._should_stop = False
+
     # ── Lifecycle ──────────────────────────────────────────────────────────────
 
     def start(self) -> None:
         """Launch the Playwright browser in a background thread."""
         if self._started:
             return
+        self._should_stop = False
+        self._pending_refresh.clear()
         self._started = True
         t = threading.Thread(target=self._browser_thread, daemon=True)
         t.start()
@@ -268,8 +275,18 @@ class WebScrapingService:
         # Initial navigation
         self._navigate_to_usage()
 
-        # Keep the browser thread alive (Playwright requires it)
-        page.wait_for_event("close", timeout=0)
+        # Main browser loop — ALL Playwright page calls must happen on this thread.
+        # The loop services refresh requests and DOM extraction so that no other
+        # thread ever touches a Playwright page object.
+        while not self._should_stop:
+            if self._pending_refresh.wait(timeout=0.25):
+                self._pending_refresh.clear()
+                if not self._should_stop:
+                    self._navigate_to_usage()
+                continue
+            if self._pending_dom_extraction:
+                self._pending_dom_extraction = False
+                self._do_dom_extraction()
 
     def _navigate_to_usage(self) -> None:
         if self._page is None:
@@ -306,7 +323,8 @@ class WebScrapingService:
             self.usage_data.weekly_reset_date = None
             self.usage_data.weekly_reset_text = ""
         self.is_loading = True
-        threading.Thread(target=self._navigate_to_usage, daemon=True).start()
+        # Signal the browser thread to navigate — never call page.goto() from here
+        self._pending_refresh.set()
 
     def open_login_window(self) -> None:
         """Show a headed browser window for login.
@@ -316,7 +334,11 @@ class WebScrapingService:
         restarts the headless context after login succeeds.
         """
         def _do_login():
-            # 1. Close the running headless browser so the user_data_dir is free.
+            # 1. Signal the browser loop to stop, then close the headless browser
+            #    so the user_data_dir lock is released before opening the headed one.
+            self._should_stop = True
+            self._pending_refresh.set()  # unblock the wait() in the loop
+
             with self._lock:
                 ctx = self._context
                 pw = self._playwright
@@ -394,30 +416,29 @@ class WebScrapingService:
             return
 
         if "settings/usage" in url:
-            # Run DOM extraction once the page has rendered
-            def _delayed_dom():
-                try:
-                    # Wait for at least one progress bar to appear instead of
-                    # sleeping a fixed amount of time.
-                    if self._page is not None:
-                        try:
-                            self._page.wait_for_selector(
-                                '[role="progressbar"]',
-                                timeout=10_000,
-                            )
-                        except Exception:
-                            pass  # proceed with extraction even if selector absent
-                    if self._page is None:
-                        return
-                    result = self._page.evaluate(_DOM_JS)
-                    j = json.loads(result)
-                    self.is_loading = False
-                    self._apply_dom_result(j)
-                except Exception as exc:
-                    logger.warning("DOM extraction error: %s", exc)
-                    self.is_loading = False
+            # Signal the browser-thread loop to run DOM extraction.
+            # No Playwright calls allowed here — this callback may fire from the
+            # Playwright event loop and re-entering its sync wrapper would deadlock.
+            self._pending_dom_extraction = True
 
-            threading.Thread(target=_delayed_dom, daemon=True).start()
+    def _do_dom_extraction(self) -> None:
+        """Run selector wait + JS evaluation on the browser thread."""
+        if self._page is None:
+            return
+        try:
+            try:
+                self._page.wait_for_selector('[role="progressbar"]', timeout=10_000)
+            except Exception:
+                pass  # proceed even if the selector never appears
+            if self._page is None:
+                return
+            result = self._page.evaluate(_DOM_JS)
+            j = json.loads(result)
+            self.is_loading = False
+            self._apply_dom_result(j)
+        except Exception as exc:
+            logger.warning("DOM extraction error: %s", exc)
+            self.is_loading = False
 
     # ── Parsing ────────────────────────────────────────────────────────────────
 
