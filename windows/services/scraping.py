@@ -21,6 +21,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable
 
+from urllib.parse import urlparse
+
 from playwright.sync_api import Browser, BrowserContext, Page, sync_playwright
 
 from models import UsageData
@@ -211,6 +213,21 @@ _DOM_JS = r"""
 """
 
 
+def _is_usage_url(url: str) -> bool:
+    """Return True only when the URL's path is /settings/usage.
+
+    A simple substring test like ``"settings/usage" in url`` fails when Claude
+    redirects unauthenticated users to
+    ``https://claude.ai/login?next=/settings/usage`` — the target path appears
+    in the query string, so the check incorrectly treats the login page as the
+    usage page and never triggers the login flow.
+    """
+    try:
+        return urlparse(url).path.rstrip("/") == "/settings/usage"
+    except Exception:
+        return False
+
+
 # ── Service ────────────────────────────────────────────────────────────────────
 
 class WebScrapingService:
@@ -297,7 +314,7 @@ class WebScrapingService:
             # After server-side redirects settle, check we actually landed on the
             # usage page.  If not, the user isn't authenticated.
             url = self._page.url
-            if url and "settings/usage" not in url:
+            if url and not _is_usage_url(url):
                 self._trigger_needs_login()
         except Exception as exc:
             logger.warning("Navigation error: %s", exc)
@@ -420,7 +437,7 @@ class WebScrapingService:
         if not url or url == "about:blank":
             return
 
-        if "settings/usage" in url:
+        if _is_usage_url(url):
             # Signal the browser-thread loop to run DOM extraction.
             # No Playwright calls allowed here — this callback may fire from the
             # Playwright event loop and re-entering its sync wrapper would deadlock.

@@ -91,6 +91,7 @@ class PopupWindow:
         self._on_refresh = on_refresh
         self._on_quit = on_quit
         self._visible = False
+        self._login_mode = False  # when True, suppress FocusOut auto-dismiss
         self._available_update: str | None = None
 
         self._win = tk.Toplevel(root)
@@ -355,7 +356,7 @@ class PopupWindow:
         self._win.after(150, self._check_and_hide)
 
     def _check_and_hide(self) -> None:
-        if not self._visible:
+        if not self._visible or self._login_mode:
             return
         try:
             focused = self._win.focus_get()
@@ -378,9 +379,13 @@ class PopupWindow:
         self._stale_frame.pack_forget()
         self._login_btn.config(command=on_login)
         self._login_frame.pack(pady=24)
+        # Prevent FocusOut from hiding the window — the user must act on this.
+        self._login_mode = True
+        self._win.unbind("<FocusOut>")
 
     def update_display(self, data: "UsageData | None", is_loading: bool) -> None:
         """Refresh all widgets with the latest data. Must be called on the main thread."""
+        self._login_mode = False
         # Clear dynamic children
         for w in self._tips_frame.winfo_children():
             w.destroy()
