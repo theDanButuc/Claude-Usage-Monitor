@@ -97,6 +97,7 @@ class AppController:
             on_quit=self._quit,
             get_refresh_interval=lambda: self._refresh_interval,
             set_refresh_interval=self._set_refresh_interval,
+            on_login=self._do_login,
         )
 
         self._refresh_timer: threading.Timer | None = None
@@ -167,10 +168,24 @@ class AppController:
         self._root.after(0, self._present_login_window)
 
     def _present_login_window(self) -> None:
+        """Show the login prompt in the popup and update the tray menu."""
+        self._tray.set_needs_login(True)
+        self._popup.show_login_required(self._do_login)
+        if not self._popup.is_visible:
+            self._popup.show()
+
+    def _do_login(self) -> None:
+        """Trigger the headed browser login flow."""
         self._scraper.open_login_window()
 
     def _on_login_success(self) -> None:
-        self._root.after(0, lambda: logger.info("Login succeeded"))
+        self._root.after(0, self._handle_login_success)
+
+    def _handle_login_success(self) -> None:
+        """Called on the main thread after a successful login."""
+        self._tray.set_needs_login(False)
+        self._popup.update_display(None, True)
+        self._scraper.refresh()
 
     # ── Refresh ────────────────────────────────────────────────────────────────
 
@@ -206,6 +221,8 @@ class AppController:
     def _do_toggle_popup(self) -> None:
         if self._popup.is_visible:
             self._popup.hide()
+        elif self._scraper.needs_login:
+            self._present_login_window()
         else:
             # Refresh if data is older than 30 s
             data = self._scraper.usage_data

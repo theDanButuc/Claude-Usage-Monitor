@@ -69,14 +69,17 @@ class TrayIcon:
         on_quit: Callable,
         get_refresh_interval: Callable[[], float],
         set_refresh_interval: Callable[[float], None],
+        on_login: Callable | None = None,
     ) -> None:
         self._on_left_click = on_left_click
         self._on_refresh = on_refresh
         self._on_quit = on_quit
         self._get_refresh_interval = get_refresh_interval
         self._set_refresh_interval = set_refresh_interval
+        self._on_login = on_login
 
         self._current_data: "UsageData | None" = None
+        self._needs_login: bool = False
         self._icon: "pystray.Icon | None" = None
 
     # ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -120,6 +123,12 @@ class TrayIcon:
         self._icon.title = tooltip
         self._icon.menu = self._build_menu()
 
+    def set_needs_login(self, needs_login: bool) -> None:
+        """Show or hide the Sign In entry in the tray menu."""
+        self._needs_login = needs_login
+        if self._icon is not None:
+            self._icon.menu = self._build_menu()
+
     # ── Menu ───────────────────────────────────────────────────────────────────
 
     def _build_menu(self) -> "pystray.Menu":
@@ -129,7 +138,14 @@ class TrayIcon:
         items = []
 
         data = self._current_data
-        if data:
+        if self._needs_login:
+            def _sign_in(icon, item):
+                if self._on_login:
+                    self._on_login()
+            items.append(pystray.MenuItem("⚠  Sign In Required", None, enabled=False))
+            items.append(pystray.MenuItem("Sign In to Claude", _sign_in))
+            items.append(pystray.Menu.SEPARATOR)
+        elif data:
             pct_str = f"{int(data.usage_percentage * 100)}%"
             usage_text = f"{data.primary_used}/{data.primary_limit}  ({pct_str})"
             items.append(pystray.MenuItem(usage_text, None, enabled=False))

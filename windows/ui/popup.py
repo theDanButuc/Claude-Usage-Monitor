@@ -202,6 +202,21 @@ class PopupWindow:
             cursor="hand2"
         ).pack(side="right")
 
+        # Login required frame
+        self._login_frame = tk.Frame(self._content, bg=_BG)
+        tk.Label(
+            self._login_frame,
+            text="Sign in to Claude to view your usage stats.",
+            bg=_BG, fg=_TEXT_SECONDARY, font=("Segoe UI", 10),
+            wraplength=self.WIDTH - 40, justify="center",
+        ).pack(pady=(12, 8))
+        self._login_btn = tk.Button(
+            self._login_frame, text="Sign In",
+            bg=_ACCENT, fg="#ffffff", relief="flat",
+            font=("Segoe UI", 10, "bold"), padx=16, pady=6, cursor="hand2",
+        )
+        self._login_btn.pack(pady=(0, 12))
+
         # Tips area
         self._tips_frame = tk.Frame(self._content, bg=_BG)
         self._tips_frame.pack(fill="x", pady=(0, 8))
@@ -354,6 +369,16 @@ class PopupWindow:
         self._update_label.config(text=f"v{version} available — View Release")
         self._update_frame.pack(fill="x", after=self._frame.winfo_children()[0])
 
+    def show_login_required(self, on_login: Callable) -> None:
+        """Replace the content area with a sign-in prompt."""
+        for w in self._tips_frame.winfo_children():
+            w.destroy()
+        self._loading_label.pack_forget()
+        self._error_frame.pack_forget()
+        self._stale_frame.pack_forget()
+        self._login_btn.config(command=on_login)
+        self._login_frame.pack(pady=24)
+
     def update_display(self, data: "UsageData | None", is_loading: bool) -> None:
         """Refresh all widgets with the latest data. Must be called on the main thread."""
         # Clear dynamic children
@@ -361,6 +386,7 @@ class PopupWindow:
             w.destroy()
         self._loading_label.pack_forget()
         self._error_frame.pack_forget()
+        self._login_frame.pack_forget()
         self._stale_frame.pack_forget()
         self._spinner_label.config(text="↻ refreshing…" if is_loading else "")
 

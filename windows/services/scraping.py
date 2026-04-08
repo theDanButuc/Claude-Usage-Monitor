@@ -365,6 +365,7 @@ class WebScrapingService:
             # 2. Open a headed browser pointing at the same user_data_dir.
             BROWSER_DATA_DIR.mkdir(parents=True, exist_ok=True)
             pw2 = sync_playwright().start()
+            login_succeeded = False
             try:
                 ctx2 = pw2.chromium.launch_persistent_context(
                     user_data_dir=str(BROWSER_DATA_DIR),
@@ -379,6 +380,7 @@ class WebScrapingService:
                         re.compile(r"https://claude\.ai/(?!login|auth)"),
                         timeout=300_000,
                     )
+                    login_succeeded = True
                 except Exception:
                     pass
                 finally:
@@ -386,9 +388,11 @@ class WebScrapingService:
             finally:
                 pw2.stop()
 
-            # 3. Notify success and restart the headless browser.
+            # 3. Restart the headless browser. Reset needs_login so the
+            #    browser thread can re-evaluate the auth state on the next
+            #    navigation (whether login succeeded or was cancelled).
             self.needs_login = False
-            if self.on_login_success:
+            if login_succeeded and self.on_login_success:
                 self.on_login_success()
 
             self._started = False
