@@ -3,57 +3,8 @@ import Combine
 import Foundation
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Injected at document START – wraps fetch/XHR before any page JS runs.
-// Every response whose URL or body looks usage-related is forwarded to Swift
-// via the "usageHandler" message handler.
-// ─────────────────────────────────────────────────────────────────────────────
-private let kInterceptorJS = """
-(function() {
-    const _send = (payload) => {
-        try { window.webkit.messageHandlers.usageHandler.postMessage(JSON.stringify(payload)); }
-        catch(e) {}
-    };
-
-    const _tryForward = (text, url) => {
-        if (!text || text.length < 10 || text.length > 500000) return;
-        // Skip static assets and i18n files
-        if (url.indexOf('.js') !== -1 || url.indexOf('.css') !== -1 ||
-            url.indexOf('i18n') !== -1 || url.indexOf('statsig') !== -1) return;
-        try {
-            const json = JSON.parse(text);
-            // Capture any API JSON that has at least one numeric value
-            if (text.indexOf('{') !== -1 && /:\\s*\\d/.test(text)) {
-                _send({ type: 'api', url: url, data: json });
-            }
-        } catch(e) {}
-    };
-
-    // ── fetch wrapper ──────────────────────────────────────────────────────
-    const _origFetch = window.fetch;
-    window.fetch = function(...args) {
-        const url = (args[0] instanceof Request ? args[0].url : String(args[0] || ''));
-        return _origFetch.apply(this, args).then(resp => {
-            resp.clone().text().then(t => _tryForward(t, url)).catch(()=>{});
-            return resp;
-        });
-    };
-
-    // ── XHR wrapper ────────────────────────────────────────────────────────
-    const _origOpen = XMLHttpRequest.prototype.open;
-    XMLHttpRequest.prototype.open = function(m, url, ...rest) {
-        this.__url = url;
-        return _origOpen.apply(this, [m, url, ...rest]);
-    };
-    const _origSend = XMLHttpRequest.prototype.send;
-    XMLHttpRequest.prototype.send = function(...args) {
-        this.addEventListener('load', () => _tryForward(this.responseText, this.__url || ''));
-        return _origSend.apply(this, args);
-    };
-})();
-"""
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Fallback DOM extraction (runs after 2.5 s to let React render).
+// Fallback DOM extraction (runs if direct API calls fail).
+// Waits for React to render, then pulls values from visible text and aria bars.
 // ─────────────────────────────────────────────────────────────────────────────
 private let kDOMExtractionJS = """
 (function() {
@@ -104,53 +55,7 @@ private let kDOMExtractionJS = """
                      [/claude\\s+team|\\bteam\\s+plan/i,'Team'],[/\\bfree\\s+plan|claude\\s+free/i,'Free']];
         for (var p of plans) { if (p[0].test(body)) { r.planType = p[1]; break; } }
 
-        // ── Specific patterns first (most reliable) ──────────────────────
-        var specificPatterns = [
-            /(\\d+)\\s+of\\s+(\\d+)\\s+(?:usage\\s+)?messages?/i,
-            /(\\d+)\\s+messages?\\s+(?:of|out\\s+of)\\s+(\\d+)/i,
-            /(\\d+)\\s*\\/\\s*(\\d+)\\s+messages?/i,
-            /messages?[:\\s]+(\\d+)\\s*(?:\\/|of)\\s*(\\d+)/i,
-        ];
-        for (var sp of specificPatterns) {
-            var sm = body.match(sp);
-            if (sm) {
-                r.messagesUsed  = parseInt(sm[1]);
-                r.messagesLimit = parseInt(sm[2]);
-                break;
-            }
-        }
-
-        // ── aria progressbar (single authoritative value) ─────────────────
-        if (r.messagesLimit <= 0) {
-            var bars = Array.from(document.querySelectorAll('[role="progressbar"]'));
-            // Use the LAST bar — Claude puts the primary usage bar last
-            for (var i = bars.length - 1; i >= 0; i--) {
-                var now = bars[i].getAttribute('aria-valuenow');
-                var max = bars[i].getAttribute('aria-valuemax');
-                if (now !== null && max !== null && parseInt(max) > 0) {
-                    r.messagesUsed  = parseInt(now);
-                    r.messagesLimit = parseInt(max);
-                    break;
-                }
-            }
-        }
-
-        // ── Generic "X / Y" fallback — take the pair with the largest limit
-        if (r.messagesLimit <= 0) {
-            var allPairs = [];
-            var re = /(\\d+)\\s*(?:of|\\/|out of)\\s*(\\d+)/gi, m;
-            while ((m = re.exec(body)) !== null) {
-                var u = parseInt(m[1]), l = parseInt(m[2]);
-                if (l > 0 && u <= l) allPairs.push([u, l]);
-            }
-            if (allPairs.length > 0) {
-                allPairs.sort((a,b) => b[1]-a[1]);   // largest limit first
-                r.messagesUsed  = allPairs[0][0];
-                r.messagesLimit = allPairs[0][1];
-            }
-        }
-
-        // aria progressbars (multiple: first = session, last = period)
+        // ── aria progressbars (first = session, last = period) ───────────────
         var bars = Array.from(document.querySelectorAll('[role="progressbar"]'));
         if (bars.length >= 2) {
             r.sessionUsed  = parseInt(bars[0].getAttribute('aria-valuenow')||'0');
@@ -163,22 +68,18 @@ private let kDOMExtractionJS = """
         }
 
         // Reset dates
-        // Collect ALL "Resets in X" occurrences — first = session, second = weekly
         var allResets = Array.from(body.matchAll(/resets?\\s+in\\s+(\\d[^\\n]{2,30}?)(?=\\s*\\d{2,3}%|\\s*Last|$)/gi));
         if (allResets.length > 0) r.sessionResetStr = allResets[0][1].trim();
         if (allResets.length > 1) r.weeklyResetStr  = allResets[1][1].trim();
-        // Absolute day+time fallback: "Fri 10:00 AM", "Friday at 10:00 AM"
         if (!r.weeklyResetStr) {
             var dayPat = /(?:Mon(?:day)?|Tue(?:sday)?|Wed(?:nesday)?|Thu(?:rsday)?|Fri(?:day)?|Sat(?:urday)?|Sun(?:day)?)\\s+(?:at\\s+)?\\d{1,2}:\\d{2}\\s*(?:AM|PM)/i;
             var wr = body.match(dayPat);
             if (wr) r.weeklyResetStr = wr[0].trim();
         }
-        // "Resets on December 25"
         var rd = body.match(/resets?\\s+(?:on\\s+)?([A-Z][a-z]+\\s+\\d{1,2}(?:,?\\s*\\d{4})?)/i);
         if (rd) r.resetDateStr = rd[1].trim();
 
         if (/rate\\s+limit(?:ed)?/i.test(body)) r.rateLimitStatus = 'Limited';
-
 
     } catch(e) { r.error = e.toString(); }
     return JSON.stringify(r);
@@ -201,6 +102,9 @@ class WebScrapingService: NSObject, ObservableObject {
 
     private let usageURL = URL(string: "https://claude.ai/settings/usage")!
 
+    /// Cached org UUID — reset when session changes.
+    private var cachedOrgID: String?
+
     private override init() {
         super.init()
         setupScrapeWebView()
@@ -211,13 +115,6 @@ class WebScrapingService: NSObject, ObservableObject {
     private func setupScrapeWebView() {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
-
-        // Interceptor runs before any page JS
-        let interceptor = WKUserScript(source: kInterceptorJS,
-                                       injectionTime: .atDocumentStart,
-                                       forMainFrameOnly: false)
-        config.userContentController.addUserScript(interceptor)
-        config.userContentController.add(self, name: "usageHandler")
 
         scrapeWebView = WKWebView(frame: .zero, configuration: config)
         scrapeWebView.navigationDelegate = self
@@ -236,13 +133,14 @@ class WebScrapingService: NSObject, ObservableObject {
     func refresh() {
         guard !isLoading else { return }
         isLoading = true
+        // Clear stale session fields while we fetch fresh data
         usageData?.sessionUsed  = 0
         usageData?.sessionLimit = 0
-        // Clear stale reset dates so a past date doesn't linger while reloading
         usageData?.resetDate = nil
         usageData?.weeklyResetDate = nil
         usageData?.weeklyResetText = ""
-        scrapeWebView.load(URLRequest(url: usageURL))
+        // Try direct API first; fall back to WebView load if no session cookie
+        tryAPIRefresh()
     }
 
     func makeLoginWebView() -> WKWebView {
@@ -254,6 +152,163 @@ class WebScrapingService: NSObject, ObservableObject {
         loginWebView = wv
         wv.load(URLRequest(url: URL(string: "https://claude.ai/login")!))
         return wv
+    }
+
+    // MARK: - Direct API (primary path)
+
+    /// Try to refresh via direct API calls without loading a page.
+    /// Falls back to WebView load if no session cookie is available.
+    private func tryAPIRefresh() {
+        WKWebsiteDataStore.default().httpCookieStore.getAllCookies { [weak self] cookies in
+            guard let self else { return }
+            if let key = self.sessionKey(from: cookies) {
+                self.fetchOrganizationAndUsage(sessionKey: key)
+            } else {
+                DispatchQueue.main.async {
+                    self.scrapeWebView.load(URLRequest(url: self.usageURL))
+                }
+            }
+        }
+    }
+
+    private func sessionKey(from cookies: [HTTPCookie]) -> String? {
+        cookies.first { $0.name == "sessionKey" && $0.domain.contains("claude.ai") }?.value
+    }
+
+    private func fetchOrganizationAndUsage(sessionKey: String) {
+        if let orgID = cachedOrgID {
+            fetchUsageFromEndpoint(sessionKey: sessionKey, orgID: orgID)
+        } else {
+            fetchOrgID(sessionKey: sessionKey) { [weak self] orgID in
+                guard let self else { return }
+                if let orgID {
+                    self.cachedOrgID = orgID
+                    self.fetchUsageFromEndpoint(sessionKey: sessionKey, orgID: orgID)
+                } else {
+                    // Could not get org ID — load page as fallback
+                    DispatchQueue.main.async {
+                        self.scrapeWebView.load(URLRequest(url: self.usageURL))
+                    }
+                }
+            }
+        }
+    }
+
+    private func fetchOrgID(sessionKey: String, completion: @escaping (String?) -> Void) {
+        var req = URLRequest(url: URL(string: "https://claude.ai/api/organizations")!)
+        applyAPIHeaders(to: &req, sessionKey: sessionKey)
+        URLSession.shared.dataTask(with: req) { data, resp, _ in
+            guard let data,
+                  let orgs = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]],
+                  let first = orgs.first
+            else { completion(nil); return }
+            let uuid = first["uuid"] as? String ?? first["id"] as? String
+            completion(uuid)
+        }.resume()
+    }
+
+    private func fetchUsageFromEndpoint(sessionKey: String, orgID: String) {
+        let url = URL(string: "https://claude.ai/api/organizations/\(orgID)/usage")!
+        var req = URLRequest(url: url)
+        applyAPIHeaders(to: &req, sessionKey: sessionKey)
+        URLSession.shared.dataTask(with: req) { [weak self] data, resp, _ in
+            guard let self else { return }
+            if let http = resp as? HTTPURLResponse, http.statusCode == 403 {
+                // Session expired
+                self.cachedOrgID = nil
+                DispatchQueue.main.async { self.isLoading = false; self.needsLogin = true }
+                return
+            }
+            guard let data,
+                  let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            else {
+                // API failed — fall back to DOM scraping
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    self.scrapeWebView.load(URLRequest(url: self.usageURL))
+                }
+                return
+            }
+            self.applyDirectAPIResult(body)
+        }.resume()
+    }
+
+    private func applyAPIHeaders(to request: inout URLRequest, sessionKey: String) {
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("en-US,en;q=0.9", forHTTPHeaderField: "Accept-Language")
+        request.setValue("sessionKey=\(sessionKey)", forHTTPHeaderField: "Cookie")
+        request.setValue("https://claude.ai/settings/usage", forHTTPHeaderField: "Referer")
+        request.setValue("https://claude.ai", forHTTPHeaderField: "Origin")
+        request.setValue("empty", forHTTPHeaderField: "Sec-Fetch-Dest")
+        request.setValue("cors", forHTTPHeaderField: "Sec-Fetch-Mode")
+        request.setValue("same-origin", forHTTPHeaderField: "Sec-Fetch-Site")
+    }
+
+    /// Parse the /api/organizations/{id}/usage response.
+    /// Keys: five_hour.utilization (0–100), five_hour.resets_at,
+    ///       seven_day.utilization (0–100), seven_day.resets_at,
+    ///       rate_limit_tier
+    private func applyDirectAPIResult(_ body: [String: Any]) {
+        var fiveHourPct:   Double? = nil
+        var fiveHourReset: Date?   = nil
+        var sevenDayPct:   Double? = nil
+        var sevenDayReset: Date?   = nil
+        var planType = "Unknown"
+
+        if let fh = body["five_hour"] as? [String: Any] {
+            fiveHourPct   = doubleValue(fh["utilization"])
+            fiveHourReset = parseResetDate(fh["resets_at"])
+        }
+        if let sd = body["seven_day"] as? [String: Any] {
+            sevenDayPct   = doubleValue(sd["utilization"])
+            sevenDayReset = parseResetDate(sd["resets_at"])
+        }
+        if let tier = body["rate_limit_tier"] as? String {
+            planType = normalizePlanTier(tier)
+        }
+
+        guard fiveHourPct != nil || sevenDayPct != nil else {
+            // Unexpected shape — fall back to DOM
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.runDOMExtraction()
+            }
+            return
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+
+            var data = self.usageData ?? UsageData(
+                planType: planType,
+                messagesUsed: 0, messagesLimit: 0,
+                resetDate: fiveHourReset,
+                rateLimitStatus: "Normal",
+                lastUpdated: Date()
+            )
+
+            if data.planType == "Unknown" || data.planType.isEmpty { data.planType = planType }
+
+            // five_hour → session window
+            if let pct = fiveHourPct {
+                data.sessionUsed  = Int(pct.rounded())
+                data.sessionLimit = 100
+                if let rd = fiveHourReset { data.resetDate = rd }
+            }
+
+            // seven_day → weekly usage
+            if let pct = sevenDayPct {
+                data.messagesUsed  = Int(pct.rounded())
+                data.messagesLimit = 100
+                if let rd = sevenDayReset { data.weeklyResetDate = rd }
+            }
+
+            data.lastUpdated = Date()
+            self.usageData   = data
+            self.isLoading   = false
+            self.needsLogin  = false
+            self.errorMessage = nil
+        }
     }
 
     // MARK: - DOM extraction (fallback)
@@ -276,67 +331,6 @@ class WebScrapingService: NSObject, ObservableObject {
 
     // MARK: - Parsing
 
-    /// Called from the fetch/XHR interceptor via message handler.
-    private func applyAPIResult(_ json: [String: Any]) {
-
-        // ── Try to find session/window usage counts
-        let candidates: [(used: Any?, limit: Any?, reset: Any?)] = [
-            (json["messages_used"],   json["messages_limit"],   json["reset_at"]),
-            (json["usage_count"],     json["usage_limit"],      json["resets_at"]),
-            (json["count"],           json["limit"],            json["reset_time"]),
-        ]
-
-        // Also look one level deep
-        var nested: [String: Any] = [:]
-        for (_, v) in json {
-            if let sub = v as? [String: Any] {
-                nested.merge(sub) { a, _ in a }
-                if let arr = v as? [[String: Any]], let first = arr.first {
-                    nested.merge(first) { a, _ in a }
-                }
-            }
-        }
-        let nestedCandidates: [(used: Any?, limit: Any?, reset: Any?)] = [
-            (nested["messages_used"],  nested["messages_limit"],  nested["reset_at"]),
-            (nested["messages_used"],  nested["messages_limit"],  nested["resets_at"]),
-            (nested["used"],           nested["limit"],           nested["reset_at"]),
-            (nested["used"],           nested["limit"],           nested["resets_at"]),
-            (nested["count"],          nested["limit"],           nested["reset_time"]),
-        ]
-
-for c in (candidates + nestedCandidates) {
-            let used  = intValue(c.used)
-            let limit = intValue(c.limit)
-            guard let u = used, let l = limit, l > 0, u <= l else { continue }
-
-            let resetDate = parseResetDate(c.reset)
-
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                // API interceptor fires before DOM extraction (which waits 2.5 s).
-                // API responses contain the current rate-limit window → session fields.
-                var data = self.usageData ?? UsageData(
-                    planType: "Unknown", messagesUsed: u, messagesLimit: l,
-                    resetDate: resetDate, rateLimitStatus: "Normal", lastUpdated: Date()
-                )
-                data.sessionUsed  = u
-                data.sessionLimit = l
-                // Only accept resetDate as session reset if it's in the future
-                // AND within 6 hours — anything longer is a billing/subscription reset,
-                // not the rate-limit window (Claude's session window is max 5h).
-                if let rd = resetDate, rd > Date(),
-                   rd.timeIntervalSince(Date()) <= 6 * 3600 {
-                    data.resetDate = rd
-                }
-                data.lastUpdated  = Date()
-                self.usageData  = data
-                self.isLoading  = false
-                self.needsLogin = false
-            }
-            return
-        }
-    }
-
     private func applyDOMResult(_ j: [String: Any]) {
         if j["needsLogin"] as? Bool == true { needsLogin = true; return }
 
@@ -353,7 +347,6 @@ for c in (candidates + nestedCandidates) {
         var resetDate: Date?
         var weeklyResetDate: Date?
 
-        // 1. Absolute date string: "resets on December 25" → billing-period / weekly reset
         if !resetDateStr.isEmpty {
             let fmts = ["MMMM d, yyyy", "MMMM d", "MMM d, yyyy", "MMM d"]
             let df = DateFormatter(); df.locale = Locale(identifier: "en_US_POSIX")
@@ -369,12 +362,10 @@ for c in (candidates + nestedCandidates) {
             }
         }
 
-        // 2. Relative duration string: "2 hours", "30 minutes" → session reset
         if !sessionResetStr.isEmpty {
             resetDate = parseRelativeDuration(sessionResetStr)
         }
 
-        // 3. Weekly reset as relative duration: "23 hr 14 min" → weeklyResetDate
         if !weeklyResetStr.isEmpty && weeklyResetDate == nil {
             weeklyResetDate = parseRelativeDuration(weeklyResetStr)
         }
@@ -390,16 +381,12 @@ for c in (candidates + nestedCandidates) {
             data.messagesUsed  = messagesUsed
             data.messagesLimit = messagesLimit
         }
-        // First progressbar = current session window; second = billing period.
-        // Only write if DOM found two bars (sessionLimit > 0).
         if sessionLimit > 0 {
             data.sessionUsed  = sessionUsed
             data.sessionLimit = sessionLimit
         }
         if let rd = resetDate, data.resetDate == nil { data.resetDate = rd }
         if let wd = weeklyResetDate { data.weeklyResetDate = wd; data.weeklyResetText = "" }
-        // Only use raw text for absolute day+time formats (e.g. "Fri 10:00 AM")
-        // Relative durations ("23 hr 14 min") are converted to Date above — don't store as text
         let looksAbsolute = weeklyResetStr.range(of: #"(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)"#, options: .regularExpression) != nil
         if !weeklyResetStr.isEmpty && looksAbsolute { data.weeklyResetText = weeklyResetStr }
         data.rateLimitStatus = rateLimitStatus
@@ -412,65 +399,55 @@ for c in (candidates + nestedCandidates) {
 
     // MARK: - Helpers
 
+    private func doubleValue(_ v: Any?) -> Double? {
+        if let d = v as? Double { return d }
+        if let i = v as? Int    { return Double(i) }
+        if let s = v as? String { return Double(s) }
+        return nil
+    }
+
     private func intValue(_ v: Any?) -> Int? {
-        if let i = v as? Int { return i }
+        if let i = v as? Int    { return i }
         if let d = v as? Double { return Int(d) }
         if let s = v as? String { return Int(s) }
         return nil
     }
 
-    /// Recursively searches a JSON dict for any reset date field and returns the nearest future one.
-    private func findResetDate(in json: [String: Any]) -> Date? {
-        let resetKeys = ["reset_at", "resets_at", "reset_time"]
-        var found: [Date] = []
-
-        func search(_ dict: [String: Any], depth: Int) {
-            guard depth < 4 else { return }
-            for (key, val) in dict {
-                if resetKeys.contains(key), let d = parseResetDate(val) { found.append(d) }
-                if let sub = val as? [String: Any] { search(sub, depth: depth + 1) }
-                if let arr = val as? [[String: Any]] { arr.forEach { search($0, depth: depth + 1) } }
-            }
-        }
-        search(json, depth: 0)
-
-        let now = Date()
-        return found.filter { $0 > now }.min()
+    /// Map API rate_limit_tier values to display names.
+    private func normalizePlanTier(_ tier: String) -> String {
+        let lower = tier.lowercased()
+        if lower.contains("max")  { return "Max" }
+        if lower.contains("pro")  { return "Pro" }
+        if lower.contains("team") { return "Team" }
+        if lower.contains("free") { return "Free" }
+        return tier
     }
 
-    /// Parses strings like "2 hours", "30 minutes", "1 day", "2h 30m", "45 mins"
-    /// into an absolute Date offset from now.
     private func parseRelativeDuration(_ s: String) -> Date? {
         var totalSeconds: Double = 0
         let lower = s.lowercased()
-
-        // Match patterns like "2 hours", "30 minutes", "1 day", "45 mins", "2h", "30m"
         let pattern = #"(\d+)\s*(day|hour|hr|min|h|d|m)s?"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return nil }
         let matches = regex.matches(in: lower, range: NSRange(lower.startIndex..., in: lower))
         guard !matches.isEmpty else { return nil }
-
         for match in matches {
             guard let valueRange = Range(match.range(at: 1), in: lower),
                   let unitRange  = Range(match.range(at: 2), in: lower),
                   let value = Double(lower[valueRange])
             else { continue }
-            let unit = String(lower[unitRange])
-            switch unit {
-            case "d", "day":          totalSeconds += value * 86400
-            case "h", "hr", "hour":  totalSeconds += value * 3600
-            case "m", "min":         totalSeconds += value * 60
+            switch String(lower[unitRange]) {
+            case "d", "day":         totalSeconds += value * 86400
+            case "h", "hr", "hour": totalSeconds += value * 3600
+            case "m", "min":        totalSeconds += value * 60
             default: break
             }
         }
-
         guard totalSeconds > 0 else { return nil }
         return Date().addingTimeInterval(totalSeconds)
     }
 
     private func parseResetDate(_ v: Any?) -> Date? {
         guard let s = v as? String, !s.isEmpty else { return nil }
-        // ISO 8601
         let iso = ISO8601DateFormatter()
         iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         if let d = iso.date(from: s) { return d }
@@ -491,7 +468,8 @@ extension WebScrapingService: WKNavigationDelegate {
             if s.contains("/login") || s.contains("/auth") || s.contains("?next=") {
                 DispatchQueue.main.async { self.isLoading = false; self.needsLogin = true }
             } else if s.contains("settings/usage") {
-                runDOMExtraction()
+                // Page loaded — extract session cookie and call API directly
+                fetchUsageViaAPIAfterPageLoad()
             } else if s.contains("claude.ai") {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
                     self.scrapeWebView.load(URLRequest(url: self.usageURL))
@@ -515,22 +493,17 @@ extension WebScrapingService: WKNavigationDelegate {
             DispatchQueue.main.async { self.isLoading = false; self.errorMessage = error.localizedDescription }
         }
     }
-}
 
-// MARK: - WKScriptMessageHandler
-
-extension WebScrapingService: WKScriptMessageHandler {
-    func userContentController(_ userContentController: WKUserContentController,
-                                didReceive message: WKScriptMessage) {
-        guard let body = message.body as? String,
-              let d = body.data(using: .utf8),
-              let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any]
-        else { return }
-
-        // Unwrap the interceptor envelope: { type, url, data }
-        if let data = j["data"] as? [String: Any] {
-            applyAPIResult(data)
+    /// Called after settings/usage page loads — pulls session cookie from WebView store
+    /// and fires direct API calls. Falls back to DOM extraction if cookie unavailable.
+    private func fetchUsageViaAPIAfterPageLoad() {
+        WKWebsiteDataStore.default().httpCookieStore.getAllCookies { [weak self] cookies in
+            guard let self else { return }
+            if let key = self.sessionKey(from: cookies) {
+                self.fetchOrganizationAndUsage(sessionKey: key)
+            } else {
+                DispatchQueue.main.async { self.runDOMExtraction() }
+            }
         }
     }
 }
-

@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import PyInstaller; print\\(PyInstaller.__version__\\)\")",
+      "Bash(pip install:*)",
+      "Bash(pyinstaller tray_app.spec)",
+      "Bash(python -c \"import customtkinter; print\\(customtkinter.__file__\\)\")",
+      "Bash(pip show:*)",
+      "Bash(C:/Users/sjsev/Documents/Development/venv/Scripts/pip.exe install:*)",
+      "Bash(C:/Users/sjsev/Documents/Development/venv/Scripts/pyinstaller.exe tray_app.spec)",
+      "Bash(C:/Users/sjsev/Documents/Development/venv/Scripts/pyinstaller.exe -y tray_app.spec)",
+      "Bash(taskkill /IM ClaudeUsageMonitor.exe /F)",
+      "Bash(taskkill //IM ClaudeUsageMonitor.exe //F)"
+    ]
+  }
+}
