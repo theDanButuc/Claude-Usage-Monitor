@@ -26,6 +26,14 @@ Icon?
 .build/
 .swiftpm/
 
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+
 # Temp files
 *.tmp
 *.log

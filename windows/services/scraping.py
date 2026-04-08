@@ -27,6 +27,10 @@ from models import UsageData
 
 logger = logging.getLogger(__name__)
 
+# Claude's session (rate-limit) window is at most 5 hours; anything longer is a
+# billing/subscription reset, not a session reset.
+_MAX_SESSION_WINDOW_SECONDS = 6 * 3600
+
 # ── Paths ──────────────────────────────────────────────────────────────────────
 
 _APP_DATA = Path(os.environ.get("APPDATA", Path.home())) / "ClaudeUsageMonitor"
@@ -425,7 +429,7 @@ class WebScrapingService:
                 data.session_limit = limit
                 now = datetime.now(timezone.utc)
                 if reset_date and reset_date > now:
-                    if (reset_date - now).total_seconds() <= 6 * 3600:
+                    if (reset_date - now).total_seconds() <= _MAX_SESSION_WINDOW_SECONDS:
                         data.reset_date = reset_date
                 data.last_updated = now
                 self.usage_data = data

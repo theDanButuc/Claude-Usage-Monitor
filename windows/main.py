@@ -46,6 +46,9 @@ _SETTINGS_FILE = _APP_DATA / "settings.json"
 
 _DEFAULT_REFRESH_INTERVAL = 120.0  # seconds
 
+# A drop of more than this percentage point indicates the session window reset.
+_SESSION_RESET_THRESHOLD = 0.01
+
 
 def _load_settings() -> dict[str, Any]:
     try:
@@ -130,7 +133,7 @@ class AppController:
             return
 
         # Detect session reset (pct dropped) → clear history
-        if data.session_percentage < (self._usage_history[-1][1] if self._usage_history else 0) - 0.01:
+        if data.session_percentage < (self._usage_history[-1][1] if self._usage_history else 0) - _SESSION_RESET_THRESHOLD:
             self._usage_history.clear()
 
         # Append current point; keep last 10

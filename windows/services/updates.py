@@ -13,9 +13,11 @@ from typing import Callable
 
 import requests
 
+from version import __version__
+
 logger = logging.getLogger(__name__)
 
-CURRENT_VERSION = "1.5.0"
+CURRENT_VERSION = __version__
 REPO_API = "https://api.github.com/repos/theDanButuc/Claude-Usage-Monitor/releases/latest"
 RELEASE_PAGE = "https://github.com/theDanButuc/Claude-Usage-Monitor/releases/latest"
 
