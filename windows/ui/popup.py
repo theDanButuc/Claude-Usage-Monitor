@@ -385,7 +385,11 @@ class PopupWindow:
 
     def update_display(self, data: "UsageData | None", is_loading: bool) -> None:
         """Refresh all widgets with the latest data. Must be called on the main thread."""
-        self._login_mode = False
+        if self._login_mode:
+            self._login_mode = False
+            # Re-arm the FocusOut auto-dismiss that was suppressed during login.
+            if self._visible:
+                self._win.after(250, lambda: self._win.bind("<FocusOut>", self._on_focus_out))
         # Clear dynamic children
         for w in self._tips_frame.winfo_children():
             w.destroy()
