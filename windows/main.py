@@ -34,9 +34,12 @@ from ui.tray import TrayIcon
 from ui.popup import PopupWindow
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
+# Suppress noisy third-party debug logs
+for _noisy in ("PIL", "asyncio", "urllib3", "playwright"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # ── Settings storage ──────────────────────────────────────────────────────────
@@ -89,6 +92,7 @@ class AppController:
             root=self._root,
             on_refresh=self._refresh_now,
             on_quit=self._quit,
+            on_login=self._do_login,
         )
 
         self._tray = TrayIcon(
@@ -174,9 +178,9 @@ class AppController:
         if not self._popup.is_visible:
             self._popup.show()
 
-    def _do_login(self) -> None:
-        """Trigger the headed browser login flow."""
-        self._scraper.open_login_window()
+    def _do_login(self, token: str) -> None:
+        """Inject the pasted session token into the running browser context."""
+        self._scraper.inject_session_cookie(token)
 
     def _on_login_success(self) -> None:
         self._root.after(0, self._handle_login_success)
@@ -185,7 +189,8 @@ class AppController:
         """Called on the main thread after a successful login."""
         self._tray.set_needs_login(False)
         self._popup.update_display(None, True)
-        self._scraper.refresh()
+        # Bring the popup to the front — the headed browser window was covering it.
+        self._popup.show()
 
     # ── Refresh ────────────────────────────────────────────────────────────────
 

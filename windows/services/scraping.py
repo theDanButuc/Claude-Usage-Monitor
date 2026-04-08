@@ -29,6 +29,14 @@ from models import UsageData
 
 logger = logging.getLogger(__name__)
 
+try:
+    from playwright_stealth import Stealth as _Stealth
+    _STEALTH = _Stealth()
+    logger.info("playwright-stealth loaded")
+except Exception as _stealth_err:
+    logger.warning("playwright-stealth unavailable: %s", _stealth_err)
+    _STEALTH = None
+
 # Claude's session (rate-limit) window is at most 5 hours; anything longer is a
 # billing/subscription reset, not a session reset.
 _MAX_SESSION_WINDOW_SECONDS = 6 * 3600
@@ -37,6 +45,7 @@ _MAX_SESSION_WINDOW_SECONDS = 6 * 3600
 
 _APP_DATA = Path(os.environ.get("APPDATA", Path.home())) / "ClaudeUsageMonitor"
 BROWSER_DATA_DIR = _APP_DATA / "browser_data"
+LOGIN_PROFILE_DIR = _APP_DATA / "login_profile"  # separate dir — no lock conflict
 USAGE_URL = "https://claude.ai/settings/usage"
 LOGIN_URL = "https://claude.ai/login"
 USER_AGENT = (
@@ -105,8 +114,21 @@ _DOM_JS = r"""
     };
     try {
         var url = window.location.href;
+        var titleLower = document.title.toLowerCase();
         if (url.includes('/login') || url.includes('/auth') ||
-            document.title.toLowerCase().includes('sign in')) {
+            titleLower.includes('sign in') || titleLower.includes('log in')) {
+            r.needsLogin = true; return JSON.stringify(r);
+        }
+        // Check page content for login wall (Claude may stay on /settings/usage
+        // but render a sign-in prompt without changing the URL).
+        var bodyText = (document.body && document.body.innerText) || '';
+        var bodyLower = bodyText.toLowerCase();
+        var hasLoginWall = (
+            (bodyLower.includes('sign in') || bodyLower.includes('log in')) &&
+            !bodyLower.includes('usage') &&
+            !bodyLower.includes('messages')
+        );
+        if (hasLoginWall) {
             r.needsLogin = true; return JSON.stringify(r);
         }
 
@@ -213,15 +235,18 @@ _DOM_JS = r"""
 """
 
 
-def _is_usage_url(url: str) -> bool:
-    """Return True only when the URL's path is /settings/usage.
+def _is_login_url(url: str) -> bool:
+    """Return True if the URL looks like an auth/login redirect.
 
-    A simple substring test like ``"settings/usage" in url`` fails when Claude
-    redirects unauthenticated users to
-    ``https://claude.ai/login?next=/settings/usage`` — the target path appears
-    in the query string, so the check incorrectly treats the login page as the
-    usage page and never triggers the login flow.
+    Mirrors the Mac app's check: url.contains("/login") || url.contains("/auth")
+    || url.contains("?next="). This catches /login, /auth, challenge_redirect
+    URLs with ?to=.../login in the query string, and ?next= redirects.
     """
+    return "/login" in url or "/auth" in url or "?next=" in url or "?to=" in url
+
+
+def _is_usage_url(url: str) -> bool:
+    """Return True only when the URL's path is /settings/usage."""
     try:
         return urlparse(url).path.rstrip("/") == "/settings/usage"
     except Exception:
@@ -249,10 +274,13 @@ class WebScrapingService:
         self._context: BrowserContext | None = None
         self._page: Page | None = None
         self._started = False
+        self._browser_thread_obj: threading.Thread | None = None
+        self._pending_session_cookies: list = []  # cookies captured from login browser
 
         # Signals for the browser thread (all Playwright calls must stay on that thread)
         self._pending_refresh = threading.Event()
         self._pending_dom_extraction = False
+        self._pending_cookie_injection: list | None = None
         self._should_stop = False
 
     # ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -265,24 +293,52 @@ class WebScrapingService:
         self._pending_refresh.clear()
         self._started = True
         t = threading.Thread(target=self._browser_thread, daemon=True)
+        self._browser_thread_obj = t
         t.start()
 
     def _browser_thread(self) -> None:
         BROWSER_DATA_DIR.mkdir(parents=True, exist_ok=True)
+        logger.debug("Browser data dir: %s", BROWSER_DATA_DIR)
         pw = sync_playwright().start()
         self._playwright = pw
 
         context = pw.chromium.launch_persistent_context(
             user_data_dir=str(BROWSER_DATA_DIR),
             headless=True,
-            args=["--disable-blink-features=AutomationControlled"],
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--disable-infobars",
+                "--no-first-run",
+                "--no-default-browser-check",
+                "--disable-features=IsolateOrigins,site-per-process",
+            ],
             user_agent=USER_AGENT,
             no_viewport=True,
+            ignore_default_args=["--enable-automation"],
         )
+        logger.info("Headless browser started (playwright-chromium)")
         self._context = context
+
+        # Inject session cookies captured from the login browser, if any.
+        if self._pending_session_cookies:
+            try:
+                context.add_cookies(self._pending_session_cookies)
+                logger.info("Injected %d session cookies from login browser", len(self._pending_session_cookies))
+            except Exception as exc:
+                logger.warning("Cookie injection failed: %s", exc)
+            self._pending_session_cookies = []
+
+        self._log_cookies("headless context started")
 
         page = context.new_page() if not context.pages else context.pages[0]
         self._page = page
+
+        if _STEALTH is not None:
+            try:
+                _STEALTH.apply_stealth_sync(page)
+                logger.info("Stealth evasions applied to page")
+            except Exception as exc:
+                logger.warning("Stealth apply failed: %s", exc)
 
         # Expose a Python function to JavaScript as window.__usageCallback__
         page.expose_function("__usageCallback__", self._on_js_message)
@@ -295,27 +351,76 @@ class WebScrapingService:
         # Main browser loop — ALL Playwright page calls must happen on this thread.
         # The loop services refresh requests and DOM extraction so that no other
         # thread ever touches a Playwright page object.
-        while not self._should_stop:
-            if self._pending_refresh.wait(timeout=0.25):
-                self._pending_refresh.clear()
-                if not self._should_stop:
-                    self._navigate_to_usage()
-                continue
-            if self._pending_dom_extraction:
-                self._pending_dom_extraction = False
-                self._do_dom_extraction()
+        try:
+            while not self._should_stop:
+                if self._pending_refresh.wait(timeout=0.25):
+                    self._pending_refresh.clear()
+                    # Inject any cookies queued from the UI before navigating.
+                    if self._pending_cookie_injection is not None:
+                        cookies = self._pending_cookie_injection
+                        self._pending_cookie_injection = None
+                        try:
+                            self._context.add_cookies(cookies)
+                            self._log_cookies("after-injection")
+                        except Exception as exc:
+                            logger.warning("Cookie injection failed: %s", exc)
+                    if not self._should_stop:
+                        self._navigate_to_usage()
+                    continue
+                if self._pending_dom_extraction:
+                    self._pending_dom_extraction = False
+                    self._do_dom_extraction()
+        finally:
+            # Clean up on this thread — Playwright's sync API is thread-local,
+            # so context/playwright must be closed here, not from another thread.
+            logger.debug("Browser thread exiting — closing context")
+            try:
+                if self._context is not None:
+                    self._context.close()
+            except Exception as exc:
+                logger.debug("Context close error: %s", exc)
+            try:
+                if self._playwright is not None:
+                    self._playwright.stop()
+            except Exception as exc:
+                logger.debug("Playwright stop error: %s", exc)
+            with self._lock:
+                self._context = None
+                self._page = None
+                self._playwright = None
+            logger.debug("Browser thread cleanup done")
+
+    def _log_cookies(self, context_label: str) -> None:
+        """Log Claude-domain cookies for debugging auth state."""
+        try:
+            ctx = self._context
+            if ctx is None:
+                logger.debug("[cookies/%s] no context", context_label)
+                return
+            all_cookies = ctx.cookies("https://claude.ai")
+            if not all_cookies:
+                logger.debug("[cookies/%s] no cookies for claude.ai — not signed in", context_label)
+            else:
+                names = [c["name"] for c in all_cookies]
+                logger.debug("[cookies/%s] %d cookie(s): %s", context_label, len(all_cookies), names)
+        except Exception as exc:
+            logger.debug("[cookies/%s] could not read cookies: %s", context_label, exc)
 
     def _navigate_to_usage(self) -> None:
         if self._page is None:
             return
         try:
             self.is_loading = True
+            logger.debug("Navigating to %s", USAGE_URL)
             self._page.goto(USAGE_URL, wait_until="domcontentloaded", timeout=30_000)
-            # After server-side redirects settle, check we actually landed on the
-            # usage page.  If not, the user isn't authenticated.
             url = self._page.url
-            if url and not _is_usage_url(url):
+            logger.debug("Landed on: %s", url)
+            self._log_cookies("post-navigate")
+            if url and (_is_login_url(url) or not _is_usage_url(url)):
+                logger.info("Redirected to auth/non-usage page → needs login (url=%s)", url)
                 self._trigger_needs_login()
+            else:
+                logger.debug("On usage page — session appears valid")
         except Exception as exc:
             logger.warning("Navigation error: %s", exc)
             self.is_loading = False
@@ -348,82 +453,48 @@ class WebScrapingService:
         # Signal the browser thread to navigate — never call page.goto() from here
         self._pending_refresh.set()
 
-    def open_login_window(self) -> None:
-        """Show a headed browser window for login.
+    def inject_session_cookie(self, cookie_str: str) -> None:
+        """Inject a session cookie pasted by the user and trigger a refresh.
 
-        Properly shuts down the headless context first (Chrome locks the
-        user_data_dir, so two contexts cannot share it simultaneously), then
-        restarts the headless context after login succeeds.
+        Accepts either ``name=value`` (e.g. ``sessionKey=abc123``) or a bare
+        value (assumed to be ``sessionKey``).  The injection is queued for the
+        browser thread so Playwright's thread-local API is respected.
         """
-        def _do_login():
-            # 1. Signal the browser loop to stop, then close the headless browser
-            #    so the user_data_dir lock is released before opening the headed one.
-            self._should_stop = True
-            self._pending_refresh.set()  # unblock the wait() in the loop
+        cookie_str = cookie_str.strip()
+        if not cookie_str:
+            return
 
-            with self._lock:
-                ctx = self._context
-                pw = self._playwright
-                self._context = None
-                self._page = None
-                self._playwright = None
+        # Parse "name=value" or treat the whole string as the value.
+        if "=" in cookie_str and len(cookie_str.split("=", 1)[0]) < 64:
+            name, value = cookie_str.split("=", 1)
+        else:
+            name, value = "sessionKey", cookie_str
 
-            if ctx is not None:
-                try:
-                    ctx.close()
-                except Exception:
-                    pass
-            if pw is not None:
-                try:
-                    pw.stop()
-                except Exception:
-                    pass
+        name = name.strip()
+        value = value.strip()
+        logger.info("Injecting session cookie: name=%s value=%s…", name, value[:8])
 
-            # 2. Open a headed browser pointing at the same user_data_dir.
-            BROWSER_DATA_DIR.mkdir(parents=True, exist_ok=True)
-            pw2 = sync_playwright().start()
-            login_succeeded = False
-            try:
-                ctx2 = pw2.chromium.launch_persistent_context(
-                    user_data_dir=str(BROWSER_DATA_DIR),
-                    headless=False,
-                    args=["--disable-blink-features=AutomationControlled"],
-                    user_agent=USER_AGENT,
-                )
-                p2 = ctx2.new_page() if not ctx2.pages else ctx2.pages[0]
-                p2.goto(LOGIN_URL, wait_until="domcontentloaded", timeout=30_000)
-                try:
-                    p2.wait_for_url(
-                        re.compile(r"https://claude\.ai/(?!login|auth)"),
-                        timeout=300_000,
-                    )
-                    login_succeeded = True
-                except Exception:
-                    pass
-                finally:
-                    ctx2.close()
-            finally:
-                pw2.stop()
-
-            # 3. Restart the headless browser. Reset needs_login so the
-            #    browser thread can re-evaluate the auth state on the next
-            #    navigation (whether login succeeded or was cancelled).
-            self.needs_login = False
-            if login_succeeded and self.on_login_success:
-                self.on_login_success()
-
-            self._started = False
-            self.start()
-
-        threading.Thread(target=_do_login, daemon=True).start()
+        self._pending_cookie_injection = [{
+            "name": name,
+            "value": value,
+            "domain": ".claude.ai",
+            "path": "/",
+            "secure": True,
+            "httpOnly": True,
+            "sameSite": "Lax",
+        }]
+        self.needs_login = False
+        self._pending_refresh.set()
 
     # ── JS message handler ─────────────────────────────────────────────────────
 
     def _on_js_message(self, raw: str) -> None:
         try:
             outer = json.loads(raw)
+            url = outer.get("url", "")
             data = outer.get("data")
             if isinstance(data, dict):
+                logger.debug("API intercept from %s — keys: %s", url, list(data.keys())[:10])
                 self._apply_api_result(data)
         except Exception as exc:
             logger.debug("JS message parse error: %s", exc)
@@ -437,15 +508,23 @@ class WebScrapingService:
         if not url or url == "about:blank":
             return
 
+        logger.debug("Page load event: %s", url)
+
+        if _is_login_url(url):
+            logger.info("Page load is a login/auth URL → needs login (url=%s)", url)
+            self._trigger_needs_login()
+            return
+
         if _is_usage_url(url):
             # Signal the browser-thread loop to run DOM extraction.
             # No Playwright calls allowed here — this callback may fire from the
             # Playwright event loop and re-entering its sync wrapper would deadlock.
+            logger.debug("Usage page loaded — queuing DOM extraction")
             self._pending_dom_extraction = True
             return
 
-        # Any URL other than the usage page means we were redirected away —
-        # covers /login, /auth, ?next=, the home page, and any future auth URLs.
+        # Any other URL (home page, etc.) also means not on the usage page.
+        logger.info("Page load not on usage page (url=%s) — needs login", url)
         self._trigger_needs_login()
 
     def _trigger_needs_login(self) -> None:
@@ -455,6 +534,7 @@ class WebScrapingService:
                 return
             self.is_loading = False
             self.needs_login = True
+        logger.info("needs_login=True — firing on_needs_login callback")
         if self.on_needs_login:
             self.on_needs_login()
 
@@ -462,15 +542,23 @@ class WebScrapingService:
         """Run selector wait + JS evaluation on the browser thread."""
         if self._page is None:
             return
+        logger.debug("DOM extraction starting")
         try:
             try:
                 self._page.wait_for_selector('[role="progressbar"]', timeout=10_000)
+                logger.debug("Progress bar selector found")
             except Exception:
-                pass  # proceed even if the selector never appears
+                logger.debug("Progress bar selector not found within 10s — running DOM JS anyway")
             if self._page is None:
                 return
             result = self._page.evaluate(_DOM_JS)
             j = json.loads(result)
+            logger.debug(
+                "DOM result: needsLogin=%s planType=%s messagesUsed=%s/%s sessionUsed=%s/%s",
+                j.get("needsLogin"), j.get("planType"),
+                j.get("messagesUsed"), j.get("messagesLimit"),
+                j.get("sessionUsed"), j.get("sessionLimit"),
+            )
             self.is_loading = False
             self._apply_dom_result(j)
         except Exception as exc:
@@ -507,6 +595,7 @@ class WebScrapingService:
             if used is None or limit is None or limit <= 0 or used > limit:
                 continue
             reset_date = _parse_iso_date(reset_v)
+            logger.info("API data matched: used=%s limit=%s reset=%s", used, limit, reset_v)
 
             with self._lock:
                 data = self.usage_data or UsageData(
@@ -532,11 +621,11 @@ class WebScrapingService:
                 self.on_usage_updated(self.usage_data)
             return
 
+        logger.debug("API intercept: no matching usage fields found in response")
+
     def _apply_dom_result(self, j: dict) -> None:
         if j.get("needsLogin"):
-            self.needs_login = True
-            if self.on_needs_login:
-                self.on_needs_login()
+            self._trigger_needs_login()
             return
 
         plan_type = j.get("planType", "Unknown")
@@ -544,6 +633,16 @@ class WebScrapingService:
         messages_limit = j.get("messagesLimit", 0)
         session_used = j.get("sessionUsed", 0)
         session_limit = j.get("sessionLimit", 0)
+
+        # If the page loaded but contained no usage data at all and we have no
+        # prior data, the user is most likely not logged in (Claude renders a
+        # login wall on /settings/usage without redirecting).
+        if (messages_limit <= 0 and session_limit <= 0
+                and plan_type == "Unknown"
+                and self.usage_data is None):
+            logger.warning("DOM extraction found no usage data — triggering login")
+            self._trigger_needs_login()
+            return
         rate_limit_status = j.get("rateLimitStatus", "Normal")
         reset_date_str = j.get("resetDateStr", "")
         session_reset_str = j.get("sessionResetStr", "")
@@ -592,6 +691,11 @@ class WebScrapingService:
             self.error_message = None
             self.needs_login = False
 
+        logger.info(
+            "DOM data applied: plan=%s messages=%s/%s session=%s/%s",
+            data.plan_type, data.messages_used, data.messages_limit,
+            data.session_used, data.session_limit,
+        )
         if self.on_usage_updated:
             self.on_usage_updated(self.usage_data)
 

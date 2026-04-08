@@ -86,10 +86,11 @@ class ProgressBar(tk.Canvas):
 class PopupWindow:
     WIDTH = 320
 
-    def __init__(self, root: tk.Tk, on_refresh: Callable, on_quit: Callable) -> None:
+    def __init__(self, root: tk.Tk, on_refresh: Callable, on_quit: Callable, on_login: Callable | None = None) -> None:
         self._root = root
         self._on_refresh = on_refresh
         self._on_quit = on_quit
+        self._on_login = on_login
         self._visible = False
         self._login_mode = False  # when True, suppress FocusOut auto-dismiss
         self._available_update: str | None = None
@@ -205,14 +206,27 @@ class PopupWindow:
 
         # Login required frame
         self._login_frame = tk.Frame(self._content, bg=_BG)
-        tk.Label(
+        self._login_msg = tk.Label(
             self._login_frame,
-            text="Sign in to Claude to view your usage stats.",
+            text="Paste your Claude session token to connect.",
             bg=_BG, fg=_TEXT_SECONDARY, font=("Segoe UI", 10),
             wraplength=self.WIDTH - 40, justify="center",
-        ).pack(pady=(12, 8))
+        )
+        self._login_msg.pack(pady=(12, 4))
+        tk.Label(
+            self._login_frame,
+            text="DevTools → Application → Cookies → claude.ai → sessionKey",
+            bg=_BG, fg=_TEXT_TERTIARY, font=("Segoe UI", 8),
+            wraplength=self.WIDTH - 40, justify="center",
+        ).pack(pady=(0, 8))
+        self._token_entry = tk.Entry(
+            self._login_frame,
+            bg=_CARD, fg=_TEXT_PRIMARY, insertbackground=_TEXT_PRIMARY,
+            relief="flat", font=("Segoe UI", 9), show="*",
+        )
+        self._token_entry.pack(fill="x", padx=16, pady=(0, 8))
         self._login_btn = tk.Button(
-            self._login_frame, text="Sign In",
+            self._login_frame, text="Apply",
             bg=_ACCENT, fg="#ffffff", relief="flat",
             font=("Segoe UI", 10, "bold"), padx=16, pady=6, cursor="hand2",
         )
@@ -371,21 +385,34 @@ class PopupWindow:
         self._update_frame.pack(fill="x", after=self._frame.winfo_children()[0])
 
     def show_login_required(self, on_login: Callable) -> None:
-        """Replace the content area with a sign-in prompt."""
+        """Replace the content area with a session-token paste prompt."""
         for w in self._tips_frame.winfo_children():
             w.destroy()
         self._loading_label.pack_forget()
         self._error_frame.pack_forget()
         self._stale_frame.pack_forget()
-        self._login_btn.config(command=on_login)
-        self._login_frame.pack(pady=24)
-        # Prevent FocusOut from hiding the window — the user must act on this.
+
+        def _apply():
+            token = self._token_entry.get().strip()
+            if token:
+                self._login_btn.config(state="disabled", text="Applying…")
+                on_login(token)
+
+        self._login_msg.config(text="Paste your Claude session token to connect.")
+        self._token_entry.delete(0, tk.END)
+        self._login_btn.config(text="Apply", command=_apply, state="normal")
+        self._token_entry.bind("<Return>", lambda _e: _apply())
+        self._login_frame.pack(pady=16)
         self._login_mode = True
         self._win.unbind("<FocusOut>")
+        self._win.after(100, self._token_entry.focus_set)
 
     def update_display(self, data: "UsageData | None", is_loading: bool) -> None:
         """Refresh all widgets with the latest data. Must be called on the main thread."""
-        if self._login_mode:
+        if self._login_mode and data is not None:
+            # Keep login_mode (FocusOut suppressed) until real data arrives so the
+            # popup isn't dismissed the moment the headed browser window closes and
+            # the OS shifts focus away.
             self._login_mode = False
             # Re-arm the FocusOut auto-dismiss that was suppressed during login.
             if self._visible:
