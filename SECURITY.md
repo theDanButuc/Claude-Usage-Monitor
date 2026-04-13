@@ -4,7 +4,7 @@
 
 | Version | Supported |
 |---------|-----------|
-| 1.4.x   | ✅ Yes     |
+| ≥ 1.4.x | ✅ Yes     |
 | < 1.4   | ❌ No      |
 
 ## How It Works (Transparency)
