@@ -1,4 +1,4 @@
-# ClaudeUsageMonitor · v1.5.0
+# ClaudeUsageMonitor · v1.6.0
 
 A native macOS menu-bar app that tracks your [Claude.ai](https://claude.ai) usage in real time — no API key needed.
 
@@ -10,7 +10,9 @@ A native macOS menu-bar app that tracks your [Claude.ai](https://claude.ai) usag
 
 <img src="screenshots/recording.gif" alt="ClaudeUsageMonitor demo" />
 
-<img src="screenshots/Screenshot.png" width="260" alt="ClaudeUsageMonitor popover" />
+<img src="screenshots/Screenshot 1.png" width="260" alt="ClaudeUsageMonitor popover" />
+
+<img src="screenshots/Extra Usage.png" width="260" alt="Extra usage section" />
 
 ---
 
@@ -20,6 +22,7 @@ A native macOS menu-bar app that tracks your [Claude.ai](https://claude.ai) usag
 - **Burn rate display** — menu bar shows estimated time left (`~45min left | 42%`) based on actual usage pace; falls back to percentage when idle
 - **Colour-coded icon** — green → orange → red as usage climbs
 - **Two-bar dashboard** — separate horizontal bars for Current session and Weekly limits, each with reset timing
+- **Extra usage tracking** — displays monthly spend progress (€ spent / € limit) when Extra Usage is enabled on your account
 - **Session-aware** — captures Claude's internal rate-limit window via a fetch interceptor, not just the billing-period total
 - **Reset countdowns** — "Resets in X hr Y min" for the session window; "Resets [Day] [Time]" for weekly limits — sourced directly from claude.ai
 - **Configurable auto-refresh** — 30s / 1m / 2m / 5m / 10m, set via right-click menu
@@ -90,9 +93,10 @@ The left value shows **estimated time left** (burn rate) when active, or **Curre
 
 **Left-click** the icon to open the popover:
 
-- **Plan usage limits** section with two progress bars:
+- **Plan usage limits** section with progress bars:
   - **Current session** — rate-limit window usage with "Resets in X hr Y min" countdown
   - **Weekly limits / All models** — billing-period usage with reset day and time (e.g. "Resets Fri 10:00 AM"), read directly from claude.ai
+  - **Extra usage** — monthly spend bar (€ spent / € limit), shown only when Extra Usage is enabled on your account
 - **Refresh button** (↻) — force an immediate scrape
 - **Quit button** — exit the app
 
