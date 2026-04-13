@@ -9,6 +9,8 @@ struct UsageData {
     var resetDate:       Date?     // near-term reset (session window, from API)
     var weeklyResetDate: Date?     // billing period / weekly reset (from DOM parsed date)
     var weeklyResetText: String = "" // raw weekday+time string e.g. "Fri 10:00 AM"
+    var extraUsageSpent: Double = 0  // € spent on extra usage this billing period
+    var extraUsageLimit: Double = 0  // € monthly spend limit for extra usage
     var rateLimitStatus: String
     var lastUpdated:     Date
 
@@ -36,6 +38,13 @@ struct UsageData {
     var weeklyPercentage: Double {
         guard messagesLimit > 0 else { return 0 }
         return min(1.0, Double(messagesUsed) / Double(messagesLimit))
+    }
+
+    var hasExtraUsage: Bool { extraUsageLimit > 0 }
+
+    var extraUsagePercentage: Double {
+        guard extraUsageLimit > 0 else { return 0 }
+        return min(1.0, extraUsageSpent / extraUsageLimit)
     }
 
     var messagesRemaining: Int { max(0, primaryLimit - primaryUsed) }

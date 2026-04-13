@@ -150,17 +150,24 @@ private let kDOMExtractionJS = """
             }
         }
 
-        // aria progressbars (multiple: first = session, last = period)
+        // aria progressbars: bars[0]=session, bars[1]=weekly, bars[2]=extra usage (if present)
         var bars = Array.from(document.querySelectorAll('[role="progressbar"]'));
         if (bars.length >= 2) {
             r.sessionUsed  = parseInt(bars[0].getAttribute('aria-valuenow')||'0');
             r.sessionLimit = parseInt(bars[0].getAttribute('aria-valuemax')||'0');
-            r.messagesUsed = parseInt(bars[bars.length-1].getAttribute('aria-valuenow')||'0');
-            r.messagesLimit= parseInt(bars[bars.length-1].getAttribute('aria-valuemax')||'0');
+            r.messagesUsed = parseInt(bars[1].getAttribute('aria-valuenow')||'0');
+            r.messagesLimit= parseInt(bars[1].getAttribute('aria-valuemax')||'0');
         } else if (bars.length === 1) {
             r.messagesUsed = parseInt(bars[0].getAttribute('aria-valuenow')||'0');
             r.messagesLimit= parseInt(bars[0].getAttribute('aria-valuemax')||'0');
         }
+
+        // Extra usage (€ spent / monthly limit) — from text, not progressbar
+        r.extraUsageSpent = 0; r.extraUsageLimit = 0;
+        var extraSpentMatch = body.match(/€\\s*([\\d.,]+)\\s+spent/i);
+        if (extraSpentMatch) r.extraUsageSpent = parseFloat(extraSpentMatch[1].replace(',', '.'));
+        var extraLimitMatch = body.match(/€\\s*([\\d.,]+)\\s+Monthly spend limit/i);
+        if (extraLimitMatch) r.extraUsageLimit = parseFloat(extraLimitMatch[1].replace(',', '.'));
 
         // Reset dates
         // Collect ALL "Resets in X" occurrences — first = session, second = weekly
@@ -349,6 +356,8 @@ for c in (candidates + nestedCandidates) {
         let resetDateStr     = j["resetDateStr"]     as? String ?? ""
         let sessionResetStr  = j["sessionResetStr"]  as? String ?? ""
         let weeklyResetStr   = j["weeklyResetStr"]   as? String ?? ""
+        let extraUsageSpent  = (j["extraUsageSpent"] as? Double) ?? ((j["extraUsageSpent"] as? Int).map { Double($0) } ?? 0)
+        let extraUsageLimit  = (j["extraUsageLimit"] as? Double) ?? ((j["extraUsageLimit"] as? Int).map { Double($0) } ?? 0)
 
         var resetDate: Date?
         var weeklyResetDate: Date?
@@ -403,6 +412,8 @@ for c in (candidates + nestedCandidates) {
         let looksAbsolute = weeklyResetStr.range(of: #"(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)"#, options: .regularExpression) != nil
         if !weeklyResetStr.isEmpty && looksAbsolute { data.weeklyResetText = weeklyResetStr }
         data.rateLimitStatus = rateLimitStatus
+        data.extraUsageSpent = extraUsageSpent
+        data.extraUsageLimit = extraUsageLimit
         data.lastUpdated = Date()
 
         usageData    = data

@@ -242,6 +242,20 @@ struct ContentView: View {
                                 progress: data.weeklyPercentage
                             )
                         }
+
+                        if data.hasExtraUsage {
+                            Divider()
+                                .opacity(0.3)
+                                .padding(.vertical, 14)
+
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("Extra usage")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(.secondary)
+
+                                extraUsageRow(data: data)
+                            }
+                        }
                     }
                 }
             }
@@ -311,6 +325,39 @@ struct ContentView: View {
                     .fill(Color.primary.opacity(0.10))
                     .frame(height: 8)
             }
+        }
+    }
+
+    private func extraUsageRow(data: UsageData) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Monthly spend")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.primary)
+                    Text(String(format: "€%.2f of €%.2f", data.extraUsageSpent, data.extraUsageLimit))
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text("\(Int(data.extraUsagePercentage * 100))% used")
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.primary.opacity(0.10))
+                        .frame(height: 8)
+
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(barColor(for: data.extraUsagePercentage))
+                        .frame(width: max(8, geo.size.width * CGFloat(data.extraUsagePercentage)), height: 8)
+                        .animation(.spring(response: 0.7, dampingFraction: 0.8), value: data.extraUsagePercentage)
+                }
+            }
+            .frame(height: 8)
         }
     }
 
