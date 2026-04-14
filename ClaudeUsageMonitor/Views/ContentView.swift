@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @EnvironmentObject var service: WebScrapingService
+    @EnvironmentObject var service: ClaudeAPIService
 
     @AppStorage("availableUpdate") private var availableUpdate: String = ""
 
@@ -241,6 +241,16 @@ struct ContentView: View {
                                 limit: data.messagesLimit,
                                 progress: data.weeklyPercentage
                             )
+
+                            if data.hasSonnetData {
+                                usageBarRow(
+                                    title: "Sonnet",
+                                    resetLabel: data.sonnetResetLabel,
+                                    used: Int((data.sonnetPercentage * 100).rounded()),
+                                    limit: 100,
+                                    progress: data.sonnetPercentage
+                                )
+                            }
                         }
 
                         if data.hasExtraUsage {
@@ -335,7 +345,7 @@ struct ContentView: View {
                     Text("Monthly spend")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(.primary)
-                    Text(String(format: "€%.2f of €%.2f", data.extraUsageSpent, data.extraUsageLimit))
+                    Text("\(Int(data.extraUsageSpent)) of \(Int(data.extraUsageLimit)) credits")
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                 }

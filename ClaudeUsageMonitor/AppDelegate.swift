@@ -11,7 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var refreshTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
 
-    private let service       = WebScrapingService.shared
+    private let service       = ClaudeAPIService.shared
     private let notifications = NotificationService.shared
     private let updater       = UpdateService.shared
 

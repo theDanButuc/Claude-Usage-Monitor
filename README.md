@@ -1,4 +1,4 @@
-# ClaudeUsageMonitor · v1.6.0
+# ClaudeUsageMonitor · v2.0.0
 
 A native macOS menu-bar app that tracks your [Claude.ai](https://claude.ai) usage in real time — no API key needed.
 
@@ -19,17 +19,17 @@ A native macOS menu-bar app that tracks your [Claude.ai](https://claude.ai) usag
 - **Menu-bar only** — no Dock icon, stays out of your way
 - **Burn rate display** — menu bar shows estimated time left (`~45min left | 42%`) based on actual usage pace; falls back to percentage when idle
 - **Colour-coded icon** — green → orange → red as usage climbs
-- **Two-bar dashboard** — separate horizontal bars for Current session and Weekly limits, each with reset timing
-- **Extra usage tracking** — displays monthly spend progress (€ spent / € limit) when Extra Usage is enabled on your account
-- **Session-aware** — captures Claude's internal rate-limit window via a fetch interceptor, not just the billing-period total
-- **Reset countdowns** — "Resets in X hr Y min" for the session window; "Resets [Day] [Time]" for weekly limits — sourced directly from claude.ai
+- **Three-bar dashboard** — separate horizontal bars for Current session, Weekly limits (all models), and Sonnet-specific usage (Max plan)
+- **Extra usage tracking** — displays monthly credit spend progress when Extra Usage is enabled on your account
+- **Direct API** — reads data straight from Claude's internal API; no DOM scraping, no JS injection
+- **Reset countdowns** — "Resets in X hr Y min" for the session window; "Resets [Day] [Time]" for weekly limits
 - **Configurable auto-refresh** — 30s / 1m / 2m / 5m / 10m, set via right-click menu
 - **Native notifications** — contextual alerts at 75%, 80%, 90%, 95%, 100% usage and on session reset
-- **Smart tip banner** — dismissable in-popover tip that updates as usage climbs (75→80→90→95%)
+- **Smart tip banner** — in-popover tip that updates as usage climbs (75→80→90→95%)
 - **Stale data indicator** — icon turns grey and shows ⚠ if data is older than 10 minutes
 - **Right-click context menu** — quick usage info and settings without opening the popover
 - **In-app update banner** — notified when a new version is available on GitHub
-- **Persisted login** — WebKit stores your Claude session automatically; you only log in once
+- **Persisted login** — you only log in once; session is reused automatically
 
 ---
 
@@ -93,9 +93,10 @@ The left value shows **estimated time left** (burn rate) when active, or **Curre
 
 - **Plan usage limits** section with progress bars:
   - **Current session** — rate-limit window usage with "Resets in X hr Y min" countdown
-  - **Weekly limits / All models** — billing-period usage with reset day and time (e.g. "Resets Fri 10:00 AM"), read directly from claude.ai
-  - **Extra usage** — monthly spend bar (€ spent / € limit), shown only when Extra Usage is enabled on your account
-- **Refresh button** (↻) — force an immediate scrape
+  - **Weekly limits / All models** — billing-period usage with reset day and time (e.g. "Resets Fri 10:00 AM")
+  - **Sonnet** — Sonnet-specific weekly usage (Max plan only)
+  - **Extra usage** — monthly credit spend bar (X of Y credits), shown only when Extra Usage is enabled on your account
+- **Refresh button** (↻) — force an immediate refresh
 - **Quit button** — exit the app
 
 **Right-click** the icon for a quick context menu:
@@ -141,13 +142,16 @@ swift scripts/make_icon.swift
 
 ### Data source
 
-The app embeds a hidden `WKWebView` that loads `claude.ai/settings/usage` using your stored browser session (via `WKWebsiteDataStore.default()` — the same cookie store Safari uses for WebKit-based apps).
+The app calls Claude's internal REST API directly:
 
-A JavaScript **fetch/XHR interceptor** is injected at document start, before any page script runs. It captures every API response that mentions usage, limits, or quotas and forwards the raw JSON to Swift. This gives session-window data (e.g. the 5-hour rate-limit window) not visible in the page's DOM text. A DOM-text extraction pass runs 5 s after page load as a fallback.
+- `GET /api/organizations` — resolves your organisation ID (cached after first call)
+- `GET /api/organizations/{org_id}/usage` — returns utilization percentages and reset timestamps for all windows (`five_hour`, `seven_day`, `seven_day_sonnet`, `extra_usage`)
 
-### Cookie persistence
+Auth is via the `sessionKey` cookie, extracted from the login WKWebView after OAuth and stored in `UserDefaults`. All subsequent requests are plain `URLSession` calls — no WKWebView or JS injection at runtime.
 
-`WKWebsiteDataStore.default()` persists cookies to disk between app launches automatically — no manual Keychain work needed. If the session expires, the login window reappears.
+### Session persistence
+
+On first launch a browser window opens so you can log in to Claude.ai. The `sessionKey` cookie is extracted and stored locally. If the session expires, the login window reappears automatically.
 
 ---
 
@@ -157,7 +161,9 @@ A JavaScript **fetch/XHR interceptor** is injected at document start, before any
 |---------|-----|
 | "Cannot be opened because the developer cannot be verified" | Right-click → Open, or run `xattr -cr /Applications/ClaudeUsageMonitor.app` |
 | Login window keeps appearing | Your Claude session expired — log in again |
-| Shows `0/0` or no numbers | Claude.ai's page changed; open a GitHub Issue with your macOS version |
+| All bars show 0% | Session key may be invalid — quit, delete the app from Applications, reinstall and log in again |
+| Sonnet bar not visible | Only shown on Max plan accounts |
+| Extra usage bar not visible | Only shown when Extra Usage is enabled on your Claude account |
 | Icon missing from menu bar | Quit via the popover's Quit button and re-open the app |
 | App won't launch after macOS update | Rebuild from source with the updated SDK |
 
@@ -174,7 +180,7 @@ ClaudeUsageMonitor/
 │   ├── Models/
 │   │   └── UsageData.swift           # Data model + computed helpers
 │   ├── Services/
-│   │   ├── WebScrapingService.swift  # WKWebView + JS interceptor
+│   │   ├── ClaudeAPIService.swift    # URLSession-based API client (replaces WebScrapingService)
 │   │   ├── NotificationService.swift # Usage threshold & reset notifications
 │   │   └── UpdateService.swift       # GitHub Releases update check
 │   ├── Views/
@@ -209,3 +215,9 @@ ClaudeUsageMonitor/
 ## License
 
 MIT License. Feel free to use Claude Usage Monitor and contribute.
+
+---
+
+## Acknowledgements
+
+- **[DukeOfCheese](https://github.com/DukeOfCheese)** — proposed the migration from DOM scraping to direct API calls, the Sonnet usage bar, and the extra usage bar ([PR #3](https://github.com/theDanButuc/Claude-Usage-Monitor/pull/3)). These ideas shaped v2.0.0.

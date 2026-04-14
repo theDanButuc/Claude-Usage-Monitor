@@ -11,6 +11,8 @@ struct UsageData {
     var weeklyResetText: String = "" // raw weekday+time string e.g. "Fri 10:00 AM"
     var extraUsageSpent: Double = 0  // € spent on extra usage this billing period
     var extraUsageLimit: Double = 0  // € monthly spend limit for extra usage
+    var sonnetPercentage: Double = 0 // seven_day_sonnet utilization (0–1), Max users only
+    var sonnetResetDate: Date? = nil // seven_day_sonnet.resets_at
     var rateLimitStatus: String
     var lastUpdated:     Date
 
@@ -41,6 +43,15 @@ struct UsageData {
     }
 
     var hasExtraUsage: Bool { extraUsageLimit > 0 }
+
+    var hasSonnetData: Bool { sonnetPercentage > 0 }
+
+    var sonnetResetLabel: String? {
+        guard let date = sonnetResetDate else { return nil }
+        let f = DateFormatter()
+        f.dateFormat = "EEE h:mm a"
+        return "Resets \(f.string(from: date))"
+    }
 
     var extraUsagePercentage: Double {
         guard extraUsageLimit > 0 else { return 0 }
@@ -127,11 +138,10 @@ struct UsageData {
     }
 
     // MARK: - Menu bar label
-    // Session side: burn rate label if available, otherwise percentage
     var menuBarLabel: String {
         let sessionStr: String?
         if hasSessionData {
-            sessionStr = burnRateLabel ?? "\(Int(sessionPercentage * 100))%"
+            sessionStr = "\(Int(sessionPercentage * 100))%"
         } else {
             sessionStr = nil
         }

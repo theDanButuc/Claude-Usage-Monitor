@@ -12,6 +12,7 @@
 		70D8340077A6F4987543D69A /* UpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D41A76CF0DAEE0BF91BDBF42 /* UpdateService.swift */; };
 		80F14FDC983509A8E74FC8ED /* AppIcon_128.png in Resources */ = {isa = PBXBuildFile; fileRef = 1A0B24B9F71A399D1947B5FE /* AppIcon_128.png */; };
 		A67C19D5BA946388EAF48165 /* ClaudeUsageMonitorApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C474AFBE78EC7F5070C5874B /* ClaudeUsageMonitorApp.swift */; };
+		AABB0002CC000002DDEE0002 /* ClaudeAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB0001CC000001DDEE0001 /* ClaudeAPIService.swift */; };
 		A8B2700E7F1063CEAE441A12 /* WebScrapingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FD4295EED2804845B35E6B7 /* WebScrapingService.swift */; };
 		BA46BB237A9B0627B2CB20E9 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 6BB1E308811B53F197A0E4FE /* AppIcon.icns */; };
 		BE196E6AA7BA22D9463F8F75 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1562A3CFCD83EE9BBE110AC /* AppDelegate.swift */; };
@@ -25,6 +26,7 @@
 		1A0B24B9F71A399D1947B5FE /* AppIcon_128.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = AppIcon_128.png; sourceTree = "<group>"; };
 		2F5D9542C42525C39B2586A4 /* CircularProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CircularProgressView.swift; sourceTree = "<group>"; };
 		BB2C3D4E5F6A7B8C9D0E1F2A /* TipRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TipRowView.swift; sourceTree = "<group>"; };
+		AABB0001CC000001DDEE0001 /* ClaudeAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeAPIService.swift; sourceTree = "<group>"; };
 		4FD4295EED2804845B35E6B7 /* WebScrapingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebScrapingService.swift; sourceTree = "<group>"; };
 		6BB1E308811B53F197A0E4FE /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
 		98237EC71645FF0A6506841E /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -78,6 +80,7 @@
 			children = (
 				E82B5738355BA39D1E9864A3 /* NotificationService.swift */,
 				D41A76CF0DAEE0BF91BDBF42 /* UpdateService.swift */,
+				AABB0001CC000001DDEE0001 /* ClaudeAPIService.swift */,
 				4FD4295EED2804845B35E6B7 /* WebScrapingService.swift */,
 			);
 			path = Services;
@@ -185,7 +188,8 @@
 				131AC9E7E8F564BB33DB286D /* NotificationService.swift in Sources */,
 				70D8340077A6F4987543D69A /* UpdateService.swift in Sources */,
 				3E5836926A578410BB10D2BC /* UsageData.swift in Sources */,
-				A8B2700E7F1063CEAE441A12 /* WebScrapingService.swift in Sources */,
+				AABB0002CC000002DDEE0002 /* ClaudeAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB0001CC000001DDEE0001 /* ClaudeAPIService.swift */; };
+		A8B2700E7F1063CEAE441A12 /* WebScrapingService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
