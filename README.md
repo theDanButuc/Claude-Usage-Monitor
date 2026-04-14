@@ -218,9 +218,6 @@ MIT License. Feel free to use Claude Usage Monitor and contribute.
 
 ---
 
-## Contributors
+## Acknowledgements
 
-| | |
-|---|---|
-| **[theDanButuc](https://github.com/theDanButuc)** | Author & maintainer |
-| **[DukeOfCheese](https://github.com/DukeOfCheese)** | Proposed direct API calls, Sonnet bar, and extra usage bar ([PR #3](https://github.com/theDanButuc/Claude-Usage-Monitor/pull/3)) — core ideas behind v2.0.0 |
+- **[DukeOfCheese](https://github.com/DukeOfCheese)** — proposed the migration from DOM scraping to direct API calls, the Sonnet usage bar, and the extra usage bar ([PR #3](https://github.com/theDanButuc/Claude-Usage-Monitor/pull/3)). These ideas shaped v2.0.0.
