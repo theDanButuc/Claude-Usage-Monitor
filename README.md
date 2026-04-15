@@ -26,6 +26,8 @@ A native macOS menu-bar app that tracks your [Claude.ai](https://claude.ai) usag
 <img src="screenshots/recording.gif" alt="ClaudeUsageMonitor demo" />
 
 <img src="screenshots/Screenshot.png" width="260" alt="ClaudeUsageMonitor popover" />
+<img src="screenshots/Screenshot 1.png" width="260" alt="ClaudeUsageMonitor popover - session usage" />
+<img src="screenshots/Extra Usage.png" width="260" alt="ClaudeUsageMonitor - extra usage bar" />
 
 ---
 
