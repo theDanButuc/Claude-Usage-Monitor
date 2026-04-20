@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var popover: NSPopover!
     private var loginWindowController: LoginWindowController?
     private var refreshTimer: Timer?
+    private var updateCheckTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
 
     private let service       = ClaudeAPIService.shared
@@ -40,7 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupPopover()
         observeService()
         startApp()
-        checkForUpdates()
+        scheduleUpdateChecks()
     }
 
     // MARK: - Status bar
@@ -180,7 +181,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Popover
 
     private func setupPopover() {
-        let rootView = ContentView().environmentObject(service)
+        let rootView = ContentView()
+            .environmentObject(service)
+            .environmentObject(updater)
         let hostingController = NSHostingController(rootView: rootView)
         hostingController.view.wantsLayer = true
 
@@ -252,9 +255,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Update check
 
-    private func checkForUpdates() {
-        updater.checkForUpdates { version in
-            UserDefaults.standard.set(version, forKey: "availableUpdate")
+    private func scheduleUpdateChecks() {
+        updater.checkForUpdates()
+        updateCheckTimer = Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in
+            self?.updater.checkForUpdates()
         }
     }
 

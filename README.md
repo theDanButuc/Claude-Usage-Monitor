@@ -1,4 +1,4 @@
-# ClaudeUsageMonitor · v2.2.0
+# ClaudeUsageMonitor · v2.3.1
 
 A native macOS menu-bar app that tracks your [Claude.ai](https://claude.ai) usage in real time — no API key needed.
 
@@ -7,6 +7,10 @@ A native macOS menu-bar app that tracks your [Claude.ai](https://claude.ai) usag
 ---
 
 ## Changelog
+
+### v2.3.1
+- **Hourly update check** — app now checks for new versions every hour in the background, not just at launch
+- **In-app download** — when an update is available, click "Update Now" to download the DMG directly in the app; a progress bar is shown during download; click "Open & Install" when ready — Finder opens the DMG for a 1-step drag-install
 
 ### v2.2.0
 - **Claude Design usage bar** — new weekly progress bar for Claude Design usage, shown automatically when your plan has Claude Design allocation; tracks the `seven_day_omelette` bucket from the API
@@ -48,7 +52,8 @@ A native macOS menu-bar app that tracks your [Claude.ai](https://claude.ai) usag
 - **Smart tip banner** — in-popover tip that updates as usage climbs (75→80→90→95%)
 - **Stale data indicator** — icon turns grey and shows ⚠ if data is older than 10 minutes
 - **Right-click context menu** — quick usage info and settings without opening the popover
-- **In-app update banner** — notified when a new version is available on GitHub
+- **In-app update banner** — notified when a new version is available on GitHub; checks every hour automatically
+- **One-click update download** — "Update Now" downloads the DMG in-app with a progress bar; "Open & Install" opens it in Finder for drag-install (1 step)
 - **Persisted login** — you only log in once; session is reused automatically
 
 ---
