@@ -1,4 +1,4 @@
-# ClaudeUsageMonitor · v2.3.1
+# ClaudeUsageMonitor · v2.2.1
 
 A native macOS menu-bar app that tracks your [Claude.ai](https://claude.ai) usage in real time — no API key needed.
 
@@ -8,7 +8,7 @@ A native macOS menu-bar app that tracks your [Claude.ai](https://claude.ai) usag
 
 ## Changelog
 
-### v2.3.1
+### v2.2.1
 - **Hourly update check** — app now checks for new versions every hour in the background, not just at launch
 - **In-app download** — when an update is available, click "Update Now" to download the DMG directly in the app; a progress bar is shown during download; click "Open & Install" when ready — Finder opens the DMG for a 1-step drag-install
 
