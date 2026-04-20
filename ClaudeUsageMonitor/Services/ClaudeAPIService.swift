@@ -208,15 +208,21 @@ private enum APIResponseParser {
                                   ?? (body["sonnet_only"]           as? [String: Any])
                                   ?? (body["seven_day_sonnet_only"] as? [String: Any])
 
+        // Claude Design — obfuscated as "omelette" in the API
+        let claudeDesign: [String: Any]? = (body["seven_day_omelette"]  as? [String: Any])
+                                        ?? (body["omelette_promotional"] as? [String: Any])
+
         let tierRaw = body["rate_limit_tier"] as? String ?? ""
 
-        let sessionPct  = utilization(fiveHour)
-        let weeklyPct   = utilization(sevenDay)
-        let sonnetPct   = utilization(sonnet)
+        let sessionPct        = utilization(fiveHour)
+        let weeklyPct         = utilization(sevenDay)
+        let sonnetPct         = utilization(sonnet)
+        let claudeDesignPct   = utilization(claudeDesign)
 
-        let resetDate       = isoDate(fiveHour?["resets_at"])
-        let weeklyResetDate = isoDate(sevenDay?["resets_at"])
-        let sonnetResetDate = isoDate(sonnet?["resets_at"])
+        let resetDate              = isoDate(fiveHour?["resets_at"])
+        let weeklyResetDate        = isoDate(sevenDay?["resets_at"])
+        let sonnetResetDate        = isoDate(sonnet?["resets_at"])
+        let claudeDesignResetDate  = isoDate(claudeDesign?["resets_at"])
 
         // Synthesise used/limit from percentage for backward-compat with UI (shows "42/100")
         let sessionUsed  = Int((sessionPct * 100).rounded())
@@ -244,8 +250,10 @@ private enum APIResponseParser {
         data.sessionLimit     = sessionLimit
         data.weeklyResetDate  = weeklyResetDate
         data.weeklyResetText  = weeklyResetText
-        data.sonnetPercentage = sonnetPct
-        data.sonnetResetDate  = sonnetResetDate
+        data.sonnetPercentage        = sonnetPct
+        data.sonnetResetDate         = sonnetResetDate
+        data.claudeDesignPercentage  = claudeDesignPct
+        data.claudeDesignResetDate   = claudeDesignResetDate
 
         // Extra usage — only when is_enabled == true
         if extraUsage?["is_enabled"] as? Bool == true ||

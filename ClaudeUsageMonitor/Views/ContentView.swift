@@ -251,6 +251,16 @@ struct ContentView: View {
                                     progress: data.sonnetPercentage
                                 )
                             }
+
+                            if data.hasClaudeDesignData {
+                                usageBarRow(
+                                    title: "Claude Design",
+                                    resetLabel: data.claudeDesignResetLabel,
+                                    used: Int((data.claudeDesignPercentage * 100).rounded()),
+                                    limit: 100,
+                                    progress: data.claudeDesignPercentage
+                                )
+                            }
                         }
 
                         if data.hasExtraUsage {

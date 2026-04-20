@@ -13,6 +13,8 @@ struct UsageData {
     var extraUsageLimit: Double = 0  // € monthly spend limit for extra usage
     var sonnetPercentage: Double = 0 // seven_day_sonnet utilization (0–1), Max users only
     var sonnetResetDate: Date? = nil // seven_day_sonnet.resets_at
+    var claudeDesignPercentage: Double = 0 // seven_day_claude_design utilization (0–1)
+    var claudeDesignResetDate: Date? = nil // seven_day_claude_design.resets_at
     var routineRunsUsed:  Int = 0   // daily routine runs used (/v1/code/routines/run-budget)
     var routineRunsLimit: Int = 0   // daily routine runs limit (plan-specific: Pro=5, Max=15, Team/Enterprise=25)
     var rateLimitStatus: String
@@ -48,6 +50,8 @@ struct UsageData {
 
     var hasSonnetData: Bool { sonnetPercentage > 0 }
 
+    var hasClaudeDesignData: Bool { claudeDesignPercentage > 0 }
+
     var hasRoutineData: Bool { routineRunsLimit > 0 }
 
     var routineRunsPercentage: Double {
@@ -59,6 +63,13 @@ struct UsageData {
 
     var sonnetResetLabel: String? {
         guard let date = sonnetResetDate else { return nil }
+        let f = DateFormatter()
+        f.dateFormat = "EEE h:mm a"
+        return "Resets \(f.string(from: date))"
+    }
+
+    var claudeDesignResetLabel: String? {
+        guard let date = claudeDesignResetDate else { return nil }
         let f = DateFormatter()
         f.dateFormat = "EEE h:mm a"
         return "Resets \(f.string(from: date))"

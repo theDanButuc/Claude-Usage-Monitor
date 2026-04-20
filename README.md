@@ -1,4 +1,4 @@
-# ClaudeUsageMonitor · v2.1.0
+# ClaudeUsageMonitor · v2.2.0
 
 A native macOS menu-bar app that tracks your [Claude.ai](https://claude.ai) usage in real time — no API key needed.
 
@@ -7,6 +7,9 @@ A native macOS menu-bar app that tracks your [Claude.ai](https://claude.ai) usag
 ---
 
 ## Changelog
+
+### v2.2.0
+- **Claude Design usage bar** — new weekly progress bar for Claude Design usage, shown automatically when your plan has Claude Design allocation; tracks the `seven_day_omelette` bucket from the API
 
 ### v2.1.0
 - **Daily routine runs** — new progress bar tracking Claude Code Routine run budget per day (Pro: 5/day, Max: 15/day, Team/Enterprise: 25/day); shown automatically when your plan includes Routines
@@ -35,7 +38,7 @@ A native macOS menu-bar app that tracks your [Claude.ai](https://claude.ai) usag
 - **Menu-bar only** — no Dock icon, stays out of your way
 - **Burn rate display** — menu bar shows estimated time left (`~45min left | 42%`) based on actual usage pace; falls back to percentage when idle
 - **Colour-coded icon** — green → orange → red as usage climbs
-- **Three-bar dashboard** — separate horizontal bars for Current session, Weekly limits (all models), and Sonnet-specific usage (Max plan)
+- **Multi-bar dashboard** — separate horizontal bars for Current session, Weekly limits (all models), Sonnet-specific usage (Max plan), and Claude Design usage
 - **Daily routine runs** — tracks Claude Code Routine run budget per day (Pro: 5, Max: 15, Team/Enterprise: 25), shown automatically when your plan includes Routines
 - **Extra usage tracking** — displays monthly credit spend progress when Extra Usage is enabled on your account
 - **Direct API** — reads data straight from Claude's internal API; no DOM scraping, no JS injection
@@ -112,6 +115,7 @@ The left value shows **estimated time left** (burn rate) when active, or **Curre
   - **Current session** — rate-limit window usage with "Resets in X hr Y min" countdown
   - **Weekly limits / All models** — billing-period usage with reset day and time (e.g. "Resets Fri 10:00 AM")
   - **Sonnet** — Sonnet-specific weekly usage (Max plan only)
+  - **Claude Design** — weekly Claude Design usage bar, shown automatically when your plan includes a Claude Design allocation
   - **Extra usage** — monthly credit spend bar (X of Y credits), shown only when Extra Usage is enabled on your account
   - **Daily routine runs** — run budget bar for Claude Code Routines (shown when your plan includes Routines)
 - **Refresh button** (↻) — force an immediate refresh
@@ -163,7 +167,7 @@ swift scripts/make_icon.swift
 The app calls Claude's internal REST API directly:
 
 - `GET /api/organizations` — resolves your organisation ID (cached after first call)
-- `GET /api/organizations/{org_id}/usage` — returns utilization percentages and reset timestamps for all windows (`five_hour`, `seven_day`, `seven_day_sonnet`, `extra_usage`)
+- `GET /api/organizations/{org_id}/usage` — returns utilization percentages and reset timestamps for all windows (`five_hour`, `seven_day`, `seven_day_sonnet`, `seven_day_omelette`, `extra_usage`)
 - `GET /v1/code/routines/run-budget` — returns daily routine run budget (`used` / `limit`); called automatically after each usage refresh
 
 Auth is via the `sessionKey` cookie, extracted from the login WKWebView after OAuth and stored in `UserDefaults`. All subsequent requests are plain `URLSession` calls — no WKWebView or JS injection at runtime.
@@ -184,6 +188,7 @@ On first launch a browser window opens so you can log in to Claude.ai. The `sess
 | Sonnet bar not visible | Only shown on Max plan accounts |
 | Extra usage bar not visible | Only shown when Extra Usage is enabled on your Claude account |
 | Routine runs bar not visible | Only shown when your plan includes Claude Code Routines (Pro, Max, Team, Enterprise) |
+| Claude Design bar not visible | Only shown when your plan includes a Claude Design allocation and usage is above 0% |
 | Icon missing from menu bar | Quit via the popover's Quit button and re-open the app |
 | App won't launch after macOS update | Rebuild from source with the updated SDK |
 
