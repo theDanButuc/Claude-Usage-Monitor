@@ -13,6 +13,7 @@ final class LoginWindowController: NSWindowController, NSWindowDelegate, WKNavig
 
     var onLoginSuccess: (() -> Void)?
     private var webView: WKWebView!
+    private var urlObservation: NSKeyValueObservation?
 
     convenience init() {
         let window = NSWindow(
@@ -44,6 +45,13 @@ final class LoginWindowController: NSWindowController, NSWindowDelegate, WKNavig
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
             "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15"
         webView.translatesAutoresizingMaskIntoConstraints = false
+
+        // claude.ai is a single-page app: after login it often swaps the URL via
+        // client-side routing (history.pushState) instead of a full page load, so
+        // `didFinish` never fires. Observe the URL directly as a fallback trigger.
+        urlObservation = webView.observe(\.url, options: [.new]) { [weak self] _, _ in
+            self?.checkLoginState()
+        }
 
         let banner = NSTextField(labelWithString:
             "Log in to Claude to allow the usage monitor to read your data.")
@@ -77,6 +85,12 @@ final class LoginWindowController: NSWindowController, NSWindowDelegate, WKNavig
     // MARK: - WKNavigationDelegate
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        checkLoginState()
+    }
+
+    // MARK: - Login state check
+
+    private func checkLoginState() {
         guard let url = webView.url?.absoluteString else { return }
         // Login is complete once we're past the /login and /oauth screens
         guard !url.contains("/login") && !url.contains("/oauth") && url.contains("claude.ai") else {
